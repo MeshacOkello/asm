@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    clearDraft, loadDraft, loadProgress, progressStatus, recordAttempt, recordSubmission, saveDraft,
+    clearDraft, collectLocalData, hasLocalData, loadDraft, loadDraftRecord, loadProgress, progressStatus,
+    recordAttempt, recordSubmission, saveDraft,
 } from './storage.js';
 
 // A Storage stand-in with the same string-only interface.
@@ -9,6 +10,8 @@ function memoryStorage(initial = {}) {
     const values = new Map(Object.entries(initial));
     return {
         values,
+        get length() { return values.size; },
+        key: (index) => [...values.keys()][index] ?? null,
         getItem: (key) => (values.has(key) ? values.get(key) : null),
         setItem: (key, value) => values.set(key, String(value)),
         removeItem: (key) => values.delete(key),
@@ -127,4 +130,27 @@ test('the default storage is globalThis.localStorage, even when reading it throw
         if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
         else delete globalThis.localStorage;
     }
+});
+
+test('drafts remember when they were written, and old plain drafts still load', () => {
+    const storage = memoryStorage({ 'assembly-visualizer-challenge:old:draft': JSON.stringify('legacy code') });
+    assert.deepEqual(loadDraftRecord('old', storage), { code: 'legacy code', updatedAt: 0 });
+    saveDraft('p', 'new code', storage, 1234);
+    assert.deepEqual(loadDraftRecord('p', storage), { code: 'new code', updatedAt: 1234 });
+    assert.equal(loadDraftRecord('missing', storage), null);
+});
+
+test('collecting this browser\'s data for the one-time import', () => {
+    const storage = memoryStorage({ 'unrelated-key': 'x', 'assembly-visualizer-theme': 'dark' });
+    assert.equal(hasLocalData(collectLocalData(storage)), false);
+    saveDraft('sum-to-n', 'sumToN:\n        ret\n', storage, 99);
+    saveDraft('blank', '   \n', storage, 5);
+    recordSubmission('array-max', accepted('gold', 5, 2), storage);
+    recordAttempt('string-length', storage);
+    const data = collectLocalData(storage);
+    assert.deepEqual(data.drafts, { 'sum-to-n': { code: 'sumToN:\n        ret\n', updated_at: 99 } });
+    assert.deepEqual(Object.keys(data.progress).sort(), ['array-max', 'string-length']);
+    assert.equal(data.progress['array-max'].best.medal, 'gold');
+    assert.equal(hasLocalData(data), true);
+    assert.deepEqual(collectLocalData(blocked), { drafts: {}, progress: {} });
 });

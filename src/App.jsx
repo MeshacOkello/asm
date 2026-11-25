@@ -4,34 +4,26 @@ import HowToUse from "./components/HowToUse";
 import AppHeader from "./components/AppHeader";
 import ChallengeList from "./components/ChallengeList";
 import ChallengeWorkspace from "./components/ChallengeWorkspace";
-import { SECTIONS } from "./guide/sections";
+import SubmissionPage from "./components/SubmissionPage";
+import ProfilePage from "./components/ProfilePage";
+import { fetchMe, logout } from "./account";
+import { routeFrom } from "./routes";
 import { applyTheme, initialTheme } from "./theme";
 import './App.css';
-
-// "#/how-to" and "#/how-to/<section>" are the guide, "#/problems" and
-// "#/problems/<slug>" the challenges; anything else is the Visualizer. Hash
-// routes need no server support and keep browser history.
-function routeFrom(hash) {
-    const challenge = /^#\/problems(?:\/([\w-]+))?\/?$/.exec(hash);
-    if (challenge) {
-        return challenge[1]
-            ? { page: "challenge", section: null, slug: challenge[1] }
-            : { page: "challenges", section: null, slug: null };
-    }
-    const match = /^#\/how-to(?:\/([\w-]+))?\/?$/.exec(hash);
-    if (!match) return { page: "visualizer", section: null, slug: null };
-    const section = SECTIONS.some(({ id }) => id === match[1]) ? match[1] : null;
-    return { page: "guide", section, slug: null };
-}
 
 const TITLES = {
     guide: "How to use · Assembly Visualizer",
     challenges: "Challenges · Assembly Visualizer",
     challenge: "Challenges · Assembly Visualizer",
+    submission: "Submission · Assembly Visualizer",
+    profile: "Profile · Assembly Visualizer",
     visualizer: "Assembly Visualizer",
 };
 
-const NAV = { guide: "guide", challenges: "challenges", challenge: "challenges", visualizer: "visualizer" };
+const NAV = {
+    guide: "guide", challenges: "challenges", challenge: "challenges", submission: "challenges",
+    profile: "profile", visualizer: "visualizer",
+};
 
 export default function App() {
     const [route, setRoute] = useState(() => routeFrom(window.location.hash));
@@ -41,6 +33,24 @@ export default function App() {
     const formats = { address: addressFormat, data: dataFormat };
     // One editor theme for every page that shows an editor.
     const [theme, setTheme] = useState(initialTheme);
+    // undefined while the session is being checked, then null or the user.
+    const [user, setUser] = useState(undefined);
+    const [account, setAccount] = useState(0);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchMe(controller.signal)
+            .then((data) => setUser(data.user))
+            .catch((failure) => {
+                if (failure?.name !== "AbortError") setUser(null);
+            });
+        return () => controller.abort();
+    }, [account]);
+
+    async function signOut() {
+        await logout().catch(() => {});
+        setUser(null);
+    }
 
     useEffect(() => {
         applyTheme(theme);
@@ -70,7 +80,7 @@ export default function App() {
 
     return (
         <>
-            <AppHeader current={NAV[route.page]}
+            <AppHeader current={NAV[route.page]} user={user} onLogout={signOut}
                 formats={formats} onAddressFormatChange={setAddressFormat} onDataFormatChange={setDataFormat} />
             {/* Kept mounted while another page shows, so the code, the run and
                 the selected step are all still there on the way back. */}
@@ -85,11 +95,20 @@ export default function App() {
                     onOpenExample={openExample}
                 />
             )}
-            {route.page === "challenges" && <ChallengeList />}
+            {route.page === "challenges" && (
+                <ChallengeList user={user} onAccountChange={() => setAccount((n) => n + 1)} />
+            )}
             {route.page === "challenge" && (
-                <ChallengeWorkspace key={route.slug} slug={route.slug} formats={formats}
+                <ChallengeWorkspace key={route.slug} slug={route.slug} tab={route.tab} user={user} formats={formats}
                     theme={theme} onThemeChange={setTheme}
                     hasUnsavedCode={hasUnsavedCode} onOpenInVisualizer={openChallengeTest} />
+            )}
+            {route.page === "submission" && (
+                <SubmissionPage key={route.id} id={route.id} user={user} formats={formats}
+                    hasUnsavedCode={hasUnsavedCode} onOpenInVisualizer={openChallengeTest} />
+            )}
+            {route.page === "profile" && (
+                <ProfilePage user={user} onAccountChange={() => setAccount((n) => n + 1)} />
             )}
         </>
     );

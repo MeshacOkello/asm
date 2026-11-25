@@ -4,6 +4,8 @@ import { ChallengeRequestError, DIFFICULTIES, collectTags, difficultyLabel, filt
 import { loadProgress, progressStatus } from "../challenges/storage";
 import { medalLabel, statusText } from "../challenges/scoring";
 import { fromClient } from "../errors";
+import { accountApi, loginErrorFrom } from "../account";
+import { ImportOffer } from "./ProfilePage";
 import "../challenges/challenges.css";
 
 export function DifficultyBadge({ difficulty }) {
@@ -28,8 +30,11 @@ function StatusCell({ progress }) {
     return <span className={`challenge-status status-${status ?? "new"}`}>{statusText(progress)}</span>;
 }
 
-export default function ChallengeList() {
+export default function ChallengeList({ user, onAccountChange }) {
     const [problems, setProblems] = useState(null);
+    // Signed in: progress from the account; signed out: from this browser.
+    const [serverProgress, setServerProgress] = useState(null);
+    const [loginError] = useState(() => loginErrorFrom(window.location.hash));
     const [error, setError] = useState(null);
     const [difficulty, setDifficulty] = useState("");
     const [tag, setTag] = useState("");
@@ -48,6 +53,20 @@ export default function ChallengeList() {
     useEffect(() => {
         window.scrollTo(0, 0);
     }, []);
+
+    useEffect(() => {
+        if (!user) return undefined;
+        const controller = new AbortController();
+        accountApi.progress(controller.signal)
+            .then((data) => setServerProgress({ userId: user.id, progress: data.progress }))
+            .catch(() => {});
+        return () => controller.abort();
+    }, [user]);
+
+    const accountProgress = user && serverProgress?.userId === user.id ? serverProgress.progress : null;
+    const progressOf = (slug) => (user
+        ? accountProgress?.[slug] ?? { attempted: false, solved: false, best: null }
+        : loadProgress(slug));
 
     const tags = problems ? collectTags(problems) : [];
     const shown = problems ? filterProblems(problems, { difficulty, tag }) : [];
@@ -83,6 +102,11 @@ export default function ChallengeList() {
                     </span>}
                 </fieldset>
 
+                {loginError && (
+                    <ErrorMessage error={{ kind: "request", message: loginError, parts: null, line: null,
+                        sourceLine: null, suggestion: "Select Sign in to try again.", detail: null }} />
+                )}
+                <ImportOffer user={user} onDone={onAccountChange} />
                 {error && <ErrorMessage error={error} />}
                 {!problems && !error && <p className="challenge-loading">Loading challenges…</p>}
 
@@ -103,7 +127,7 @@ export default function ChallengeList() {
                                         <th scope="row"><a href={`#/problems/${problem.slug}`}>{problem.title}</a></th>
                                         <td><DifficultyBadge difficulty={problem.difficulty} /></td>
                                         <td><Tags tags={problem.tags} /></td>
-                                        <td><StatusCell progress={loadProgress(problem.slug)} /></td>
+                                        <td><StatusCell progress={progressOf(problem.slug)} /></td>
                                     </tr>
                                 ))}
                                 {shown.length === 0 && (

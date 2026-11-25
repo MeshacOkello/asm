@@ -47,13 +47,24 @@ function remove(storage, name) {
     }
 }
 
-export function loadDraft(slug, storage) {
+// A draft is stored with when it was written, so a signed-in workspace can
+// tell whether this browser's copy or the account's is newer. Drafts saved
+// before that are plain strings, read as written at time 0.
+export function loadDraftRecord(slug, storage) {
     const draft = read(storage, key(slug, "draft"));
-    return typeof draft === "string" ? draft : null;
+    if (typeof draft === "string") return { code: draft, updatedAt: 0 };
+    if (draft && typeof draft.code === "string" && Number.isFinite(draft.updatedAt)) {
+        return { code: draft.code, updatedAt: draft.updatedAt };
+    }
+    return null;
 }
 
-export function saveDraft(slug, code, storage) {
-    return write(storage, key(slug, "draft"), code);
+export function loadDraft(slug, storage) {
+    return loadDraftRecord(slug, storage)?.code ?? null;
+}
+
+export function saveDraft(slug, code, storage, updatedAt = Date.now()) {
+    return write(storage, key(slug, "draft"), { code, updatedAt });
 }
 
 export function clearDraft(slug, storage) {
@@ -120,4 +131,35 @@ export function recordSubmission(slug, response, storage) {
     }
     write(storage, key(slug, "progress"), next);
     return normalizeProgress(next);
+}
+
+// Everything this browser holds for the challenges, for the one-time import
+// into an account: { drafts: { slug: { code, updated_at } }, progress: { slug: … } }.
+export function collectLocalData(storage) {
+    const drafts = {};
+    const progress = {};
+    try {
+        const target = store(storage);
+        const keys = [];
+        for (let index = 0; index < (target?.length ?? 0); index++) keys.push(target.key(index));
+        for (const name of keys) {
+            const match = new RegExp(`^${PREFIX}:([a-z0-9-]+):(draft|progress)$`).exec(name ?? "");
+            if (!match) continue;
+            const [, slug, part] = match;
+            if (part === "draft") {
+                const draft = loadDraftRecord(slug, storage);
+                if (draft?.code.trim()) drafts[slug] = { code: draft.code, updated_at: draft.updatedAt };
+            } else {
+                const entry = loadProgress(slug, storage);
+                if (entry.attempted || entry.solved) progress[slug] = entry;
+            }
+        }
+    } catch {
+        // Unreadable storage simply has nothing to import.
+    }
+    return { drafts, progress };
+}
+
+export function hasLocalData(data) {
+    return Object.keys(data.drafts).length > 0 || Object.keys(data.progress).length > 0;
 }

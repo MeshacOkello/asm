@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef } from "react";
 import PageNav from "./PageNav";
+import UserMenu from "./UserMenu";
 
-export default function AppHeader({ current, formats, onAddressFormatChange, onDataFormatChange }) {
+export default function AppHeader({ current, user, onLogout, formats, onAddressFormatChange, onDataFormatChange }) {
     const header = useRef(null);
 
     useLayoutEffect(() => {
@@ -37,6 +38,7 @@ export default function AppHeader({ current, formats, onAddressFormatChange, onD
                     </select>
                 </label>
             </fieldset>
+            <UserMenu user={user} onLogout={onLogout} />
         </header>
     );
 }

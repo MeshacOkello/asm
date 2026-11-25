@@ -1,6 +1,6 @@
 // Talking to the challenge endpoints, and the small pure helpers the
 // Challenges pages share.
-import { fromResponse, fromTransport } from "../errors.js";
+import { fromClient, fromResponse, fromTransport } from "../errors.js";
 
 export const DIFFICULTIES = ["easy", "medium", "hard"];
 
@@ -34,19 +34,26 @@ export function visualizerProgram(problem, test, code) {
 }
 
 export class ChallengeRequestError extends Error {
-    constructor(error) {
+    constructor(error, { status = null, loginRequired = false } = {}) {
         super(error.message);
         this.name = "ChallengeRequestError";
         this.error = error;
+        this.status = status;
+        this.loginRequired = loginRequired;
     }
 }
 
+// The UI's error shape for anything a request threw.
+export function failureFrom(error) {
+    return error instanceof ChallengeRequestError ? error.error : fromClient(error);
+}
+
 // A JSON request whose failures all come back as the UI's one error shape.
-export async function requestJson(url, { body, signal } = {}) {
+export async function requestJson(url, { body, signal, method } = {}) {
     let response;
     try {
         response = await fetch(url, body === undefined ? { signal } : {
-            method: "POST",
+            method: method ?? "POST",
             headers: { "Content-type": "application/json" },
             body: JSON.stringify(body),
             signal,
@@ -63,6 +70,10 @@ export async function requestJson(url, { body, signal } = {}) {
     } catch {
         throw new ChallengeRequestError(fromTransport(null, { status: response.status, body: text }));
     }
-    if (!response.ok) throw new ChallengeRequestError(fromResponse(data, { status: response.status }));
+    if (!response.ok) {
+        throw new ChallengeRequestError(fromResponse(data, { status: response.status }), {
+            status: response.status, loginRequired: data?.login_required === true,
+        });
+    }
     return data;
 }
