@@ -2,7 +2,8 @@ import { useLayoutEffect, useRef } from "react";
 import PageNav from "./PageNav";
 import UserMenu from "./UserMenu";
 
-export default function AppHeader({ current, user, onLogout, formats, onAddressFormatChange, onDataFormatChange }) {
+// The display formats only matter where addresses and data are shown: the Visualizer.
+export default function AppHeader({ current, user, onLogout, showFormats = true, formats, onAddressFormatChange, onDataFormatChange }) {
     const header = useRef(null);
 
     useLayoutEffect(() => {
@@ -21,7 +22,7 @@ export default function AppHeader({ current, user, onLogout, formats, onAddressF
                 <span className="app-name">Assembly Visualizer</span>
             </a>
             <PageNav current={current} />
-            <fieldset className="header-formats">
+            <fieldset className="header-formats" hidden={!showFormats}>
                 <legend className="visually-hidden">Visualizer display formats</legend>
                 <label>
                     Addresses

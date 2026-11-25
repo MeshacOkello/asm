@@ -4,7 +4,7 @@ import HowToUse from "./components/HowToUse";
 import AppHeader from "./components/AppHeader";
 import ChallengeList from "./components/ChallengeList";
 import ChallengeWorkspace from "./components/ChallengeWorkspace";
-import SubmissionPage from "./components/SubmissionPage";
+import SubmissionRedirect from "./components/SubmissionRedirect";
 import ProfilePage from "./components/ProfilePage";
 import { fetchMe, logout } from "./account";
 import { routeFrom } from "./routes";
@@ -80,7 +80,7 @@ export default function App() {
 
     return (
         <>
-            <AppHeader current={NAV[route.page]} user={user} onLogout={signOut}
+            <AppHeader current={NAV[route.page]} user={user} onLogout={signOut} showFormats={route.page === "visualizer"}
                 formats={formats} onAddressFormatChange={setAddressFormat} onDataFormatChange={setDataFormat} />
             {/* Kept mounted while another page shows, so the code, the run and
                 the selected step are all still there on the way back. */}
@@ -99,13 +99,13 @@ export default function App() {
                 <ChallengeList user={user} onAccountChange={() => setAccount((n) => n + 1)} />
             )}
             {route.page === "challenge" && (
-                <ChallengeWorkspace key={route.slug} slug={route.slug} tab={route.tab} user={user} formats={formats}
+                <ChallengeWorkspace key={route.slug} slug={route.slug} tab={route.tab} submissionId={route.id ?? null}
+                    user={user} formats={formats}
                     theme={theme} onThemeChange={setTheme}
                     hasUnsavedCode={hasUnsavedCode} onOpenInVisualizer={openChallengeTest} />
             )}
             {route.page === "submission" && (
-                <SubmissionPage key={route.id} id={route.id} user={user} formats={formats}
-                    hasUnsavedCode={hasUnsavedCode} onOpenInVisualizer={openChallengeTest} />
+                <SubmissionRedirect key={route.id} id={route.id} user={user} />
             )}
             {route.page === "profile" && (
                 <ProfilePage user={user} onAccountChange={() => setAccount((n) => n + 1)} />

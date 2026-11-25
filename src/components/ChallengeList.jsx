@@ -3,6 +3,7 @@ import ErrorMessage from "./ErrorMessage";
 import { ChallengeRequestError, DIFFICULTIES, collectTags, difficultyLabel, filterProblems, requestJson, tagLabel } from "../challenges/problems";
 import { loadProgress, progressStatus } from "../challenges/storage";
 import { medalLabel, statusText } from "../challenges/scoring";
+import Icon from "./Icon";
 import { fromClient } from "../errors";
 import { accountApi, loginErrorFrom } from "../account";
 import { ImportOffer } from "./ProfilePage";
@@ -20,14 +21,31 @@ export function MedalBadge({ medal, children }) {
     return <span className={`medal medal-${medal}`}>{children}</span>;
 }
 
-function StatusCell({ progress }) {
+// A check for solved, a half circle for tried, nothing for not started.
+function StatusMark({ progress }) {
     const status = progressStatus(progress);
-    if (status === "solved" && progress.best) {
-        return <span className="challenge-status status-solved">
-            Solved <MedalBadge medal={progress.best.medal}>{medalLabel(progress.best.medal)}</MedalBadge>
-        </span>;
-    }
-    return <span className={`challenge-status status-${status ?? "new"}`}>{statusText(progress)}</span>;
+    return (
+        <span className={`status-mark status-mark-${status ?? "new"}`} title={statusText(progress)}>
+            {status === "solved" && <Icon name="check" size={16} />}
+            {status === "attempted" && <span className="attempted-dot" aria-hidden="true" />}
+            <span className="visually-hidden">{statusText(progress)}</span>
+        </span>
+    );
+}
+
+function SolvedRing({ solved, total }) {
+    const fraction = total ? solved / total : 0;
+    const circumference = 2 * Math.PI * 8;
+    return (
+        <span className="solved-ring" role="status">
+            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+                <circle cx="10" cy="10" r="8" className="ring-track" />
+                <circle cx="10" cy="10" r="8" className="ring-fill"
+                    strokeDasharray={`${fraction * circumference} ${circumference}`} transform="rotate(-90 10 10)" />
+            </svg>
+            {solved}/{total} Solved
+        </span>
+    );
 }
 
 export default function ChallengeList({ user, onAccountChange }) {
@@ -74,33 +92,13 @@ export default function ChallengeList({ user, onAccountChange }) {
     return (
         <div className="challenges-page">
             <main className="challenges-content">
-                <h1>Challenges</h1>
-                <p className="challenges-lede">
-                    Solve each problem in AArch64 assembly. Run checks your code against the visible tests;
-                    Submit runs every test, hidden ones included, and scores an accepted solution against
-                    the reference.
-                </p>
-
-                <fieldset className="challenge-filters">
-                    <legend className="visually-hidden">Filter challenges</legend>
-                    <label>
-                        Difficulty
-                        <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
-                            <option value="">All</option>
-                            {DIFFICULTIES.map((level) => <option key={level} value={level}>{difficultyLabel(level)}</option>)}
-                        </select>
-                    </label>
-                    <label>
-                        Tag
-                        <select value={tag} onChange={(event) => setTag(event.target.value)}>
-                            <option value="">All</option>
-                            {tags.map((name) => <option key={name} value={name}>{tagLabel(name)}</option>)}
-                        </select>
-                    </label>
-                    {problems && <span className="challenge-count" role="status">
-                        {shown.length} of {problems.length} {problems.length === 1 ? "challenge" : "challenges"}
-                    </span>}
-                </fieldset>
+                <header className="list-head">
+                    <h1>Challenges</h1>
+                    <p className="challenges-lede">
+                        Write each solution in AArch64 assembly. Run checks the visible tests; Submit grades every
+                        test and measures the instructions and memory accesses your code takes.
+                    </p>
+                </header>
 
                 {loginError && (
                     <ErrorMessage error={{ kind: "request", message: loginError, parts: null, line: null,
@@ -108,34 +106,55 @@ export default function ChallengeList({ user, onAccountChange }) {
                 )}
                 <ImportOffer user={user} onDone={onAccountChange} />
                 {error && <ErrorMessage error={error} />}
-                {!problems && !error && <p className="challenge-loading">Loading challenges…</p>}
 
+                <div className="list-controls">
+                    <fieldset className="challenge-filters">
+                        <legend className="visually-hidden">Filter challenges</legend>
+                        <label>
+                            <span className="visually-hidden">Difficulty</span>
+                            <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
+                                <option value="">All difficulties</option>
+                                {DIFFICULTIES.map((level) => <option key={level} value={level}>{difficultyLabel(level)}</option>)}
+                            </select>
+                        </label>
+                        <label>
+                            <span className="visually-hidden">Topic</span>
+                            <select value={tag} onChange={(event) => setTag(event.target.value)}>
+                                <option value="">All topics</option>
+                                {tags.map((name) => <option key={name} value={name}>{tagLabel(name)}</option>)}
+                            </select>
+                        </label>
+                        {(difficulty || tag) && (
+                            <button type="button" className="quiet-button" onClick={() => { setDifficulty(""); setTag(""); }}>Clear</button>
+                        )}
+                    </fieldset>
+                    {problems && <SolvedRing solved={problems.filter((problem) => progressOf(problem.slug).solved).length}
+                        total={problems.length} />}
+                </div>
+
+                {!problems && !error && <p className="challenge-loading">Loading challenges…</p>}
                 {problems && (
-                    <div className="reference-table challenge-table">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Title</th>
-                                    <th scope="col">Difficulty</th>
-                                    <th scope="col">Tags</th>
-                                    <th scope="col">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {shown.map((problem) => (
-                                    <tr key={problem.slug}>
-                                        <th scope="row"><a href={`#/problems/${problem.slug}`}>{problem.title}</a></th>
-                                        <td><DifficultyBadge difficulty={problem.difficulty} /></td>
-                                        <td><Tags tags={problem.tags} /></td>
-                                        <td><StatusCell progress={progressOf(problem.slug)} /></td>
-                                    </tr>
-                                ))}
-                                {shown.length === 0 && (
-                                    <tr><td colSpan={4} className="challenge-empty">No challenges match these filters.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    <ol className="problem-rows" aria-label={`${shown.length} of ${problems.length} challenges`}>
+                        {shown.map((problem) => {
+                            const progress = progressOf(problem.slug);
+                            return (
+                                <li key={problem.slug}>
+                                    <a className="problem-row" href={`#/problems/${problem.slug}`}>
+                                        <StatusMark progress={progress} />
+                                        <span className="problem-title">{problem.title}</span>
+                                        <span className="problem-tags">{problem.tags.map(tagLabel).join(" · ")}</span>
+                                        <span className="problem-medal">
+                                            {progress.solved && progress.best && (
+                                                <MedalBadge medal={progress.best.medal}>{medalLabel(progress.best.medal)}</MedalBadge>
+                                            )}
+                                        </span>
+                                        <DifficultyBadge difficulty={problem.difficulty} />
+                                    </a>
+                                </li>
+                            );
+                        })}
+                        {shown.length === 0 && <li className="challenge-empty">No challenges match these filters.</li>}
+                    </ol>
                 )}
             </main>
         </div>

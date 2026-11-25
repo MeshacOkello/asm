@@ -52,6 +52,28 @@ def ranking(attempt, owner_id, accepted, threshold):
     return {
         'users': len(best),
         'compared': len(others),
-        'instructions': beats(0, attempt['instructions']),
-        'memory_accesses': beats(1, attempt['memory_accesses']),
+        'instructions': {**beats(0, attempt['instructions']),
+                         'distribution': histogram([r[0] for r in others], attempt['instructions'])},
+        'memory_accesses': {**beats(1, attempt['memory_accesses']),
+                            'distribution': histogram([r[1] for r in others], attempt['memory_accesses'])},
     }
+
+
+MAX_BARS = 24
+
+
+def histogram(values, yours, bars=MAX_BARS):
+    """Other students' best results as bars, with the one this attempt falls in.
+
+    Each bar covers a whole-number range [low, high]; a narrow spread gets one
+    bar per value. Counts only: no bar says which student it holds.
+    """
+    low = min(values + [yours])
+    high = max(values + [yours])
+    width = max(1, -(-(high - low + 1) // bars))
+    count = (high - low) // width + 1
+    buckets = [{'low': low + i * width, 'high': low + (i + 1) * width - 1, 'users': 0}
+               for i in range(count)]
+    for value in values:
+        buckets[(value - low) // width]['users'] += 1
+    return {'bars': buckets, 'yours': (yours - low) // width}

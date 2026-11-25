@@ -165,7 +165,7 @@ export default function ProfilePage({ user, onAccountChange }) {
                                     <tbody>
                                         {profile.recent.map((row) => (
                                             <tr key={row.id}>
-                                                <th scope="row"><a href={`#/submissions/${row.id}`}>{row.title}</a></th>
+                                                <th scope="row"><a href={`#/problems/${row.slug}/submissions/${row.id}`}>{row.title}</a></th>
                                                 <td><VerdictText submission={row} /></td>
                                                 <td className="history-metrics">{metricsText(row)}</td>
                                                 <td>{row.medal ? <MedalBadge medal={row.medal}>{medalLabel(row.medal)}</MedalBadge> : "—"}</td>

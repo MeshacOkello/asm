@@ -101,6 +101,8 @@ test('routes', () => {
     assert.deepEqual(routeFrom('#/problems/sum-to-n/submissions'),
         { page: 'challenge', section: null, slug: 'sum-to-n', tab: 'submissions' });
     assert.deepEqual(routeFrom('#/submissions/42'), { page: 'submission', section: null, slug: null, id: 42 });
+    assert.deepEqual(routeFrom('#/problems/sum-to-n/submissions/7'),
+        { page: 'challenge', section: null, slug: 'sum-to-n', tab: 'result', id: 7 });
     assert.equal(routeFrom('#/submissions/abc').page, 'visualizer');
     assert.equal(routeFrom('#/profile').page, 'profile');
     assert.equal(routeFrom('#/how-to').page, 'guide');

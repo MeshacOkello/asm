@@ -6,11 +6,12 @@ import { SECTIONS } from "./guide/sections.js";
 // is the Visualizer. Hash routes need no server support and keep history.
 export function routeFrom(hash) {
     const path = hash.split("?")[0];
-    const challenge = /^#\/problems(?:\/([\w-]+)(?:\/(submissions))?)?\/?$/.exec(path);
+    const challenge = /^#\/problems(?:\/([\w-]+)(?:\/(submissions)(?:\/(\d+))?)?)?\/?$/.exec(path);
     if (challenge) {
-        return challenge[1]
-            ? { page: "challenge", section: null, slug: challenge[1], tab: challenge[2] ? "submissions" : "description" }
-            : { page: "challenges", section: null, slug: null };
+        if (!challenge[1]) return { page: "challenges", section: null, slug: null };
+        const tab = challenge[3] ? "result" : challenge[2] ? "submissions" : "description";
+        return { page: "challenge", section: null, slug: challenge[1], tab,
+            ...(challenge[3] ? { id: Number(challenge[3]) } : {}) };
     }
     const submission = /^#\/submissions\/(\d+)\/?$/.exec(path);
     if (submission) return { page: "submission", section: null, slug: null, id: Number(submission[1]) };

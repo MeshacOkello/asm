@@ -109,6 +109,7 @@ def public_result(problem, test, result, number, hidden_number):
     shown = visible_test(problem, test, number)
     shown.update({
         'passed': result['passed'], 'kind': result['kind'], 'kind_label': label,
+        'actual': result['actual'],
         'actual_text': describe_result(problem, result['actual']),
         'message': result['message'], 'error': result['error'],
         'instructions': result['instructions'], 'memory_accesses': result['memory_accesses'],

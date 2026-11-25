@@ -369,14 +369,28 @@ class RankingTests(unittest.TestCase):
         self.assertEqual(result['users'], 11)
         self.assertEqual(result['compared'], 10)
         # Worse on instructions: user 3 (12) and users 4-10 (20); tie with user 2 does not count.
-        self.assertEqual(result['instructions'], {'beats': 80, 'worse': 8})
+        self.assertEqual((result['instructions']['beats'], result['instructions']['worse']), (80, 8))
         # Worse on memory: only user 1 (9); user 2 and 3 tie at 5.
-        self.assertEqual(result['memory_accesses'], {'beats': 10, 'worse': 1})
+        self.assertEqual((result['memory_accesses']['beats'], result['memory_accesses']['worse']), (10, 1))
 
     def test_the_owners_own_results_are_not_compared(self):
         accepted = [(0, 5, 5), (0, 50, 50)] + [(user, 5, 5) for user in range(1, 10)]
         result = rankings.ranking({'instructions': 50, 'memory_accesses': 50}, 0, accepted, 10)
         self.assertEqual(result['instructions']['beats'], 0)
+
+    def test_distribution_bars_cover_every_student(self):
+        result = rankings.histogram([10, 10, 12, 40], 11)
+        bars = result['bars']
+        self.assertEqual(sum(bar['users'] for bar in bars), 4)
+        self.assertEqual((bars[0]['low'], bars[-1]['high'] >= 40), (10, True))
+        yours = bars[result['yours']]
+        self.assertTrue(yours['low'] <= 11 <= yours['high'])
+        self.assertLessEqual(len(bars), rankings.MAX_BARS)
+        wide = rankings.histogram(list(range(0, 10_000, 7)), 5000)
+        self.assertLessEqual(len(wide['bars']), rankings.MAX_BARS)
+        self.assertEqual(sum(bar['users'] for bar in wide['bars']), len(range(0, 10_000, 7)))
+        single = rankings.histogram([5, 5], 5)
+        self.assertEqual(single, {'bars': [{'low': 5, 'high': 5, 'users': 2}], 'yours': 0})
 
     def test_threshold_is_configurable(self):
         with mock.patch.dict(os.environ, {'RANKING_MIN_USERS': '3'}):
@@ -398,8 +412,9 @@ class RankingTests(unittest.TestCase):
         ranking = mine['ranking']
         self.assertEqual((ranking['users'], ranking['compared']), (4, 3))
         # Two of three others used more instructions; all tie on memory accesses.
-        self.assertEqual(ranking['instructions'], {'beats': 66, 'worse': 2})
-        self.assertEqual(ranking['memory_accesses'], {'beats': 0, 'worse': 0})
+        self.assertEqual((ranking['instructions']['beats'], ranking['instructions']['worse']), (66, 2))
+        self.assertEqual((ranking['memory_accesses']['beats'], ranking['memory_accesses']['worse']), (0, 0))
+        self.assertEqual(sum(bar['users'] for bar in ranking['instructions']['distribution']['bars']), 3)
         self.assertEqual(mine['score']['medal'], 'silver')
 
 
