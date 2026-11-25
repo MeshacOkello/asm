@@ -27,7 +27,7 @@ Write assembly, execute it one instruction at a time, and see how each instructi
 Install the backend dependencies:
 
 ```bash
-python3 -m pip install flask keystone-engine unicorn
+python3 -m pip install -r backend/requirements.txt
 ```
 
 Install the frontend dependencies from the project root:
@@ -53,7 +53,9 @@ In another terminal, from the project root:
 npm run dev
 ```
 
-The dev server proxies `/simulate` and `/problems` to `http://127.0.0.1:5001`. Set `BACKEND_URL` to use a backend on another address.
+The dev server proxies `/simulate`, `/problems`, `/auth` and `/api` to `http://127.0.0.1:5001`. Set `BACKEND_URL` to use a backend on another address.
+
+To try accounts locally without Google credentials, start the backend with `AUTH_DEV_LOGIN=1`: Sign in then logs you in as a made-up student. Never set it on a public server.
 
 Open the local URL printed by Vite.
 
@@ -69,7 +71,13 @@ Registers, memory, and stdout reflect the selected step. **Reset** returns to th
 
 ## Challenges
 
-The **Challenges** page (`#/problems`) is a set of graded problems. Each problem has a statement, starter code and tests. **Run** checks your code against the visible tests; **Submit** runs every test, hidden ones included. A submission is **Accepted** only when every test passes. Failing hidden tests report only their number and the kind of failure: wrong answer, runtime error, exceeded instruction limit, exceeded time limit, or assembler error.
+The **Challenges** page (`#/problems`) is a set of graded problems. Each problem has a statement, starter code and tests. Anyone can browse and **Run** code against the visible tests; results appear under the editor. **Submit** runs every test, hidden ones included, and needs a Google sign-in: a signed-out student is taken through Google and brought back to the same problem with their code intact. A submission is **Accepted** only when every test passes. Failing hidden tests report only their number and the kind of failure: wrong answer, runtime error, exceeded instruction limit, exceeded time limit, or assembler error.
+
+Each submission opens its own page (`#/submissions/<id>`). It shows *Judging…* until grading finishes, then the verdict, tests passed and submission time; the score for an accepted attempt; the first failing test and every test's result; the submitted code, with **Compare with previous attempt** (any earlier attempt can be picked); and **Back to problem**, **Open in visualizer** and **Edit and resubmit**. Submissions are private to their owner.
+
+The problem's **Submissions** tab lists your attempts. The **Profile** page (`#/profile`) shows problems solved overall and by difficulty, attempted problems not yet solved, recent submissions, and the current and longest streak: consecutive days, in your own time zone, with at least one accepted submission. A streak that reached yesterday stands for the rest of today.
+
+Signed-in drafts and progress are saved to the account. Progress made in a browser before signing in can be imported once; imported solves count in the solved record, but streaks and rankings come only from submissions graded on the server.
 
 An accepted submission is scored by the instructions it executed and the memory accesses (loads and stores) it made over all tests, against the reference solution's totals:
 
@@ -79,7 +87,9 @@ An accepted submission is scored by the instructions it executed and the memory 
 | Silver | Both totals at most 1.5× the reference's |
 | Bronze | Any other accepted submission |
 
-**Open in visualizer** on a visible test loads your code into the Visualizer to step through: a function problem's code comes with the grader's `main` after it, and an io problem's test input is supplied as stdin. Drafts, solved status and the best medal are kept in this browser's localStorage; there are no accounts.
+Once at least `RANKING_MIN_USERS` students (default 10) have an accepted submission on a problem, an accepted attempt also shows how it ranks: "beats X% of students" for instructions and for memory accesses separately. Each other student counts once, by their best accepted result (fewest instructions, then fewest memory accesses), and only strictly worse results count as beaten. Below the threshold the reference comparison is shown instead.
+
+**Open in visualizer** on a visible test loads your code into the Visualizer to step through: a function problem's code comes with the grader's `main` after it, and an io problem's test input is supplied as stdin. Signed out, drafts and progress are kept in this browser's localStorage.
 
 ### Adding a problem
 
@@ -103,9 +113,37 @@ Problems are validated when the backend starts, and every reference solution is 
 cd backend && python3 -m unittest
 ```
 
+The backend tests use a throwaway SQLite database for each test and never touch `backend/data/`.
+
 ```bash
 node --test src/
 ```
+
+## Deploying
+
+The app deploys as **one web service plus one database**:
+
+- **One service.** Flask serves the API and the built frontend (`dist/`), so the session cookie is same-origin and needs no CORS. The `Dockerfile` builds both and runs gunicorn with one worker and several threads. Submissions are judged one at a time on a background thread in that worker, by the same grading worker process Run uses.
+- **One database.** Accounts, sessions, submissions and drafts are stored through SQLAlchemy in the database `DATABASE_URL` names. Locally that defaults to a SQLite file in `backend/data/`. Free web hosts do not keep their disk between deploys, so production needs a hosted database: a free Postgres such as [Neon](https://neon.tech) or Supabase works. This database is the only infrastructure v2 adds.
+- **Sign-in.** Google OAuth (authorization code with PKCE), done directly with the standard library. Sessions are random tokens in an HttpOnly, SameSite=Lax cookie; the database keeps only their SHA-256 hash, and Log out deletes them.
+
+Hidden tests and reference solutions stay in `backend/problems/` on the server. A stored submission keeps only the redacted result a student may see.
+
+To deploy, for example on Render's free web service with a Neon database:
+
+1. In Google Cloud Console, create an OAuth client of type *Web application*. Add `https://<your-site>/auth/callback` as an authorized redirect URI (and `http://localhost:5173/auth/callback` for local development).
+2. Create a Postgres database and copy its connection URL.
+3. Create a web service from this repository using the `Dockerfile`, with these environment variables:
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | The Postgres URL (`postgres://…` is accepted) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client |
+| `PUBLIC_URL` | The site's origin, such as `https://asm-visualizer.onrender.com`. It builds the redirect URI and turns on Secure cookies. |
+| `SECRET_KEY` | A long random string |
+| `RANKING_MIN_USERS` | Optional; students needed before rankings show (default 10) |
+
+Tables are created on first start. A free instance that sleeps when idle keeps nothing in memory that matters: a submission still being judged when it stopped is judged again on the next start.
 
 ## Supported library functions
 
