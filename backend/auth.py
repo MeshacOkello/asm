@@ -24,6 +24,7 @@ import json
 import os
 import re
 import secrets
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -175,6 +176,42 @@ def _claims(id_token):
         raise GoogleError('Google sent an ID token that could not be read.') from None
 
 
+def tls_context():
+    """Verify Google's certificate against certifi's roots when available.
+
+    The python.org builds of Python for macOS ship without trusted root
+    certificates until "Install Certificates.command" is run, so the system
+    default would reject every HTTPS connection to Google.
+    """
+    try:
+        import certifi
+    except ImportError:
+        return ssl.create_default_context()
+    return ssl.create_default_context(cafile=certifi.where())
+
+
+def google_error_message(error):
+    """Why the token request failed, in words a developer can act on."""
+    if isinstance(error, urllib.error.HTTPError):
+        try:
+            body = json.loads(error.read() or b'{}')
+        except ValueError:
+            body = {}
+        reason = body.get('error_description') or body.get('error') or f'HTTP {error.code}'
+        hint = {
+            'redirect_uri_mismatch': f' Add {redirect_uri()} as an authorized redirect URI of the OAuth client.',
+            'invalid_client': ' Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.',
+        }.get(body.get('error'), '')
+        return f'Google refused the sign-in: {reason}.{hint}'
+    reason = getattr(error, 'reason', error)
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return ('The server could not verify Google\'s certificate. Install certifi in the '
+                'backend\'s Python, or run "Install Certificates.command" for python.org Python on macOS.')
+    if isinstance(error, ValueError):
+        return 'Google answered the sign-in with something that was not JSON.'
+    return f'The server could not reach Google ({reason}).'
+
+
 def exchange_code(code, verifier):
     """Trade the authorization code for Google's ID token claims."""
     body = urllib.parse.urlencode({
@@ -185,10 +222,10 @@ def exchange_code(code, verifier):
     token_request = urllib.request.Request(
         GOOGLE_TOKEN, data=body, headers={'Content-Type': 'application/x-www-form-urlencoded'})
     try:
-        with urllib.request.urlopen(token_request, timeout=10) as response:
+        with urllib.request.urlopen(token_request, timeout=10, context=tls_context()) as response:
             tokens = json.loads(response.read())
     except (urllib.error.URLError, ValueError) as error:
-        raise GoogleError(f'Google did not accept the sign-in ({type(error).__name__}).') from None
+        raise GoogleError(google_error_message(error)) from None
     return tokens
 
 

@@ -4,3 +4,4 @@ unicorn==2.1.4
 SQLAlchemy==2.1.9
 psycopg[binary]==3.3.9
 gunicorn==27.0.1
+certifi==2026.10.23

@@ -125,6 +125,44 @@ class GoogleSignInTests(unittest.TestCase):
         self.assertIn('login_error', response.headers['Location'])
 
 
+class GoogleErrorMessageTests(unittest.TestCase):
+    """A failed token exchange says why, not just that it failed."""
+
+    def setUp(self):
+        testing.isolated_client(self, **GOOGLE)
+
+    def http_error(self, body):
+        import io
+        import urllib.error
+        return urllib.error.HTTPError(auth.GOOGLE_TOKEN, 400, 'Bad Request', {},
+                                      io.BytesIO(json.dumps(body).encode()))
+
+    def message(self, error):
+        with app.test_request_context('/auth/callback'):
+            return auth.google_error_message(error)
+
+    def test_google_refusals_name_the_reason_and_the_fix(self):
+        text = self.message(self.http_error({'error': 'redirect_uri_mismatch'}))
+        self.assertIn('redirect_uri_mismatch', text)
+        self.assertIn('http://localhost/auth/callback', text)
+        text = self.message(self.http_error({'error': 'invalid_client',
+                                             'error_description': 'The OAuth client was not found.'}))
+        self.assertIn('The OAuth client was not found.', text)
+        self.assertIn('GOOGLE_CLIENT_SECRET', text)
+
+    def test_certificate_failures_say_how_to_fix_them(self):
+        import ssl
+        import urllib.error
+        error = urllib.error.URLError(ssl.SSLCertVerificationError(1, 'certificate verify failed'))
+        self.assertIn('certifi', self.message(error))
+
+    def test_the_tls_context_verifies_certificates(self):
+        import ssl
+        context = auth.tls_context()
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+
+
 class SubmissionTests(unittest.TestCase):
     def setUp(self):
         self.client = testing.isolated_client(self)
