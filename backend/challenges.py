@@ -19,7 +19,7 @@ bp = Blueprint('challenges', __name__)
 # Problems live in backend/problems/ and are validated here, at startup: a
 # malformed problem, or a reference solution that fails its own tests, stops
 # the backend with a ProblemError naming the file. Reference totals are
-# computed once and kept for the medals.
+# computed once and shown next to every accepted submission.
 
 FAILURE_LABELS = {
     grader.WRONG_ANSWER: 'Wrong answer',

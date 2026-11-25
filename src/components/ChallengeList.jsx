@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import ErrorMessage from "./ErrorMessage";
 import { ChallengeRequestError, DIFFICULTIES, collectTags, difficultyLabel, filterProblems, requestJson, tagLabel } from "../challenges/problems";
 import { loadProgress, progressStatus } from "../challenges/storage";
-import { medalLabel, statusText } from "../challenges/scoring";
+import { statusText } from "../challenges/scoring";
 import Icon from "./Icon";
 import { fromClient } from "../errors";
 import { accountApi, loginErrorFrom } from "../account";
@@ -15,10 +15,6 @@ export function DifficultyBadge({ difficulty }) {
 
 export function Tags({ tags }) {
     return <span className="tag-list">{tags.map((tag) => <span key={tag} className="tag-chip">{tagLabel(tag)}</span>)}</span>;
-}
-
-export function MedalBadge({ medal, children }) {
-    return <span className={`medal medal-${medal}`}>{children}</span>;
 }
 
 // A check for solved, a half circle for tried, nothing for not started.
@@ -143,11 +139,6 @@ export default function ChallengeList({ user, onAccountChange }) {
                                         <StatusMark progress={progress} />
                                         <span className="problem-title">{problem.title}</span>
                                         <span className="problem-tags">{problem.tags.map(tagLabel).join(" · ")}</span>
-                                        <span className="problem-medal">
-                                            {progress.solved && progress.best && (
-                                                <MedalBadge medal={progress.best.medal}>{medalLabel(progress.best.medal)}</MedalBadge>
-                                            )}
-                                        </span>
                                         <DifficultyBadge difficulty={problem.difficulty} />
                                     </a>
                                 </li>

@@ -13,6 +13,9 @@ const PATHS = {
     reset: "M4 12a8 8 0 1 0 2.4-5.7 M4 4v5h5",
     chart: "M4 20V10 M10 20V4 M16 20v-8 M22 20H2",
     close: "M6 6l12 12 M18 6L6 18",
+    cpu: "M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4",
+    memory: "M3 8h18v8H3z M7 8v8 M11 8v8 M15 8v8 M6 16v3 M18 16v3",
+    link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
 };
 
 export default function Icon({ name, size = 16 }) {

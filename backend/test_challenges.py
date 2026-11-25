@@ -448,29 +448,18 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(scoring.totals(self.results('passed', 'passed', instructions=7, memory=3)),
                          {'instructions': 14, 'memory_accesses': 6})
 
-    def test_medal_boundaries(self):
-        cases = [
-            ((100, 20), scoring.GOLD),
-            ((50, 0), scoring.GOLD),
-            ((101, 20), scoring.SILVER),
-            ((150, 30), scoring.SILVER),
-            ((151, 20), scoring.BRONZE),
-            ((100, 31), scoring.BRONZE),
-        ]
-        for (instructions, memory), expected in cases:
-            with self.subTest(instructions=instructions, memory=memory):
-                score = {'instructions': instructions, 'memory_accesses': memory}
-                self.assertEqual(scoring.medal(score, self.reference), expected)
-
-    def test_medal_with_no_reference_memory_accesses(self):
-        reference = {'instructions': 10, 'memory_accesses': 0}
-        self.assertEqual(scoring.medal({'instructions': 10, 'memory_accesses': 0}, reference), 'gold')
-        self.assertEqual(scoring.medal({'instructions': 10, 'memory_accesses': 1}, reference), 'bronze')
+    def test_better_means_fewer_instructions_then_fewer_memory_accesses(self):
+        best = {'instructions': 100, 'memory_accesses': 20}
+        self.assertTrue(scoring.better(best, None))
+        self.assertTrue(scoring.better({'instructions': 99, 'memory_accesses': 500}, best))
+        self.assertTrue(scoring.better({'instructions': 100, 'memory_accesses': 19}, best))
+        self.assertFalse(scoring.better({'instructions': 100, 'memory_accesses': 20}, best))
+        self.assertFalse(scoring.better({'instructions': 101, 'memory_accesses': 0}, best))
 
     def test_summary_scores_only_an_accepted_submission(self):
         accepted = scoring.summarize(self.results('passed', 'passed', instructions=60), self.reference)
         self.assertEqual(accepted['score'], {
-            'instructions': 120, 'memory_accesses': 4, 'reference': self.reference, 'medal': 'silver'})
+            'instructions': 120, 'memory_accesses': 4, 'reference': self.reference})
         failed = scoring.summarize(self.results('passed', 'wrong_answer'), self.reference)
         self.assertNotIn('score', failed)
         self.assertEqual((failed['passed'], failed['total']), (1, 2))
@@ -556,27 +545,19 @@ class ChallengeEndpointTests(unittest.TestCase):
         self.assertEqual(data['total'], sum(test['visible'] for test in problem['tests']))
         self.assertNotIn('score', data)
 
-    def test_accepted_reference_earns_gold(self):
+    def test_accepted_submissions_report_totals_beside_the_reference(self):
         for slug, problem in PROBLEMS.items():
             with self.subTest(slug):
                 data = self.submit(slug, problem['reference']).get_json()
                 self.assertEqual(data['verdict_label'], 'Accepted')
-                self.assertEqual(data['score']['medal'], 'gold')
                 self.assertEqual(data['score']['reference'], REFERENCE_TOTALS[slug])
-
-    def test_medals_against_the_reference(self):
-        reference = PROBLEMS['sum-to-n']['reference']
-        body = reference.split('sumToN:\n', 1)[1]
-        # One extra instruction per call: within 1.5 times the reference.
-        silver = 'sumToN:\n        mov     x2, x2\n' + body
-        # Two memory accesses per call, where the reference makes none.
-        bronze = ('sumToN:\n        str     x19, [sp, -16]!\n        ldr     x19, [sp], 16\n'
-                  + body)
-        for source, medal in ((silver, 'silver'), (bronze, 'bronze')):
-            with self.subTest(medal):
-                data = self.submit('sum-to-n', source).get_json()
-                self.assertEqual(data['verdict'], 'accepted')
-                self.assertEqual(data['score']['medal'], medal)
+                self.assertEqual(data['instructions'], REFERENCE_TOTALS[slug]['instructions'])
+                self.assertNotIn('medal', data['score'])
+        # One wasted instruction per call shows up in the total.
+        body = PROBLEMS['sum-to-n']['reference'].split('sumToN:\n', 1)[1]
+        slower = self.submit('sum-to-n', 'sumToN:\n        mov     x2, x2\n' + body).get_json()
+        tests = len(PROBLEMS['sum-to-n']['tests'])
+        self.assertEqual(slower['score']['instructions'], REFERENCE_TOTALS['sum-to-n']['instructions'] + tests)
 
     def test_failing_hidden_tests_reveal_only_their_number_and_kind(self):
         for slug, problem in PROBLEMS.items():

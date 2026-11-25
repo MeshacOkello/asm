@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import ErrorMessage from "./ErrorMessage";
 import Icon from "./Icon";
-import { MedalBadge } from "./ChallengeList";
-import { MEDALS, medalLabel, medalThresholds } from "../challenges/scoring";
+import { chartLayout } from "../challenges/submissions";
+import { Avatar } from "./UserMenu";
 import { inputFields, outputFields, visibleWhitespace } from "../challenges/cases";
 import { diffStats, lineDiff } from "../challenges/diff";
 import { fromResponse } from "../errors";
@@ -88,102 +88,132 @@ export function CaseView({ problem, test, result = null, formats }) {
 // --- performance ------------------------------------------------------------
 
 const METRIC_INFO = [
-    { key: "instructions", label: "Instructions", icon: "chart" },
-    { key: "memory_accesses", label: "Memory accesses", icon: "chart" },
+    { key: "instructions", label: "Instructions", unit: "instr", icon: "cpu" },
+    { key: "memory_accesses", label: "Memory accesses", unit: "loads/stores", icon: "memory" },
 ];
 
-function Distribution({ metric, data }) {
-    const { bars, yours } = data.distribution;
+function rangeText(bar) {
+    if (bar.overflow) return `${bar.low.toLocaleString("en-US")} or more`;
+    return bar.low === bar.high ? bar.low.toLocaleString("en-US")
+        : `${bar.low.toLocaleString("en-US")}–${bar.high.toLocaleString("en-US")}`;
+}
+
+// The range selector under the chart: a grey overview of every bar, with
+// two handles that pick which bars the chart above shows.
+function RangeSelector({ bars, start, end, onChange, label }) {
     const most = Math.max(1, ...bars.map((bar) => bar.users));
-    const width = 100 / bars.length;
-    const yoursAt = `${(yours + 0.5) * width}%`;
+    const count = bars.length;
+    const last = count - 1;
     return (
-        <figure className="distribution">
-            <div className="distribution-plot">
-                <svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img"
-                    aria-label={`${data.beats}% of other students used more ${metric.label.toLowerCase()}`}>
-                    {bars.map((bar, index) => {
-                        const height = bar.users ? Math.max(2, (bar.users / most) * 34) : 0.6;
-                        return <rect key={index} x={index * width + width * 0.15} width={width * 0.7}
-                            y={40 - height} height={height} rx="0.6"
-                            className={index === yours ? "bar-yours" : "bar-other"} />;
-                    })}
-                </svg>
-                <span className="distribution-you" style={{ left: yoursAt }}>
-                    <span className="you-label">You</span>
-                </span>
+        <div className="chart-brush">
+            <div className="brush-bars" aria-hidden="true">
+                {bars.map((bar, index) => (
+                    <span key={index} className={`brush-column${index >= start && index <= end ? " brush-in" : ""}`}>
+                        <span className="brush-bar" style={{ height: `${bar.users ? Math.max(12, (bar.users / most) * 100) : 6}%` }} />
+                    </span>
+                ))}
+                <span className="brush-window" style={{ left: `${(start / count) * 100}%`, width: `${((end - start + 1) / count) * 100}%` }} />
             </div>
-            <figcaption className="distribution-axis">
-                <span>{bars[0].low.toLocaleString("en-US")}</span>
-                <span className="distribution-key">Students by their best accepted result</span>
-                <span>{bars[bars.length - 1].high.toLocaleString("en-US")}</span>
+            <input type="range" className="brush-handle" min={0} max={last} value={start}
+                aria-label={`${label}: first range shown`} aria-valuetext={rangeText(bars[start])}
+                onChange={(event) => onChange(Math.min(Number(event.target.value), end), end)} />
+            <input type="range" className="brush-handle" min={0} max={last} value={end}
+                aria-label={`${label}: last range shown`} aria-valuetext={rangeText(bars[end])}
+                onChange={(event) => onChange(start, Math.max(Number(event.target.value), start))} />
+        </div>
+    );
+}
+
+// Other students' best results, LeetCode style: blue bars giving each range's
+// share of students on a percentage axis, your range in solid blue with your
+// avatar above it, and the reference solution marked. Below the ranking
+// threshold only you and the reference are on it.
+function Distribution({ metric, data, ranked, threshold, user }) {
+    const bars = data.distribution.bars;
+    const [range, setRange] = useState([0, bars.length - 1]);
+    const [start, end] = range[1] < bars.length ? range : [0, bars.length - 1];
+    const layout = chartLayout(data.distribution, start, end);
+    const count = layout.bars.length;
+    const yours = data.distribution.bars[data.distribution.yours];
+    const reference = data.distribution.reference != null ? data.distribution.bars[data.distribution.reference] : null;
+    return (
+        <figure className={`chart${count > 30 ? " chart-dense" : ""}`}
+            aria-label={ranked ? `${metric.label}: you beat ${data.beats}% of other students` : `${metric.label}: yours and the reference`}>
+            <div className="chart-area">
+                {layout.gridlines.map((line) => (
+                    <span key={line} className="chart-gridline" style={{ bottom: `${(line / layout.yMax) * 100}%` }}>
+                        {!layout.empty && <span className="chart-y">{line}%</span>}
+                    </span>
+                ))}
+                <div className="chart-bars" aria-hidden="true">
+                    {layout.bars.map((bar) => (
+                        <span key={bar.index} className={`chart-column${bar.yours ? " chart-yours" : ""}${bar.overflow ? " chart-overflow" : ""}`}
+                            title={`${rangeText(bar)} ${metric.unit}: ${bar.users} ${bar.users === 1 ? "student" : "students"}`}>
+                            <span className="chart-bar" style={{ height: bar.users ? `${bar.height}%` : undefined }} />
+                            {bar.reference && <span className="chart-reference"><span>Reference</span></span>}
+                            {bar.yours && (
+                                <span className="chart-marker" style={{ bottom: `${bar.height}%` }}>
+                                    {user ? <Avatar user={user} className="chart-avatar" /> : <span className="chart-avatar avatar-initial">•</span>}
+                                </span>
+                            )}
+                        </span>
+                    ))}
+                </div>
+            </div>
+            <div className="chart-x" aria-hidden="true">
+                {layout.ticks.map((tick) => (
+                    <span key={tick.index} style={{ left: `${((tick.index + 0.5) / count) * 100}%` }}>
+                        {tick.label.toLocaleString("en-US")}{tick.overflow ? "+" : ""}
+                    </span>
+                ))}
+            </div>
+            {bars.length > 8 && (
+                <RangeSelector bars={bars} start={start} end={end} label={metric.label}
+                    onChange={(first, last) => setRange([first, last])} />
+            )}
+            <figcaption className="chart-caption">
+                You: {rangeText(yours)} {metric.unit}
+                {reference && <> · Reference: {rangeText(reference)}</>}
+                {" · "}
+                {ranked
+                    ? "each other student counted once, by their best accepted result"
+                    : `classmates appear once ${threshold ?? "enough"} students have solved this problem`}
             </figcaption>
         </figure>
     );
 }
 
-// Gold, silver and bronze as bands along the metric, with a marker for you.
-function ReferenceScale({ metric, value, reference }) {
-    const limits = medalThresholds(reference);
-    const gold = limits.gold[metric.key];
-    const silver = limits.silver[metric.key];
-    if (gold === 0) {
-        return <p className="scale-note">
-            The reference makes no {metric.label.toLowerCase()}; {value === 0 ? "neither do you." : "any at all leaves gold out of reach."}
-        </p>;
-    }
-    const end = Math.max(value, silver) * 1.15;
-    const at = (n) => `${Math.min(100, (n / end) * 100)}%`;
-    return (
-        <div className="reference-scale" aria-label={`${value} against a reference of ${gold}`}>
-            <div className="scale-track">
-                <span className="scale-band band-gold" style={{ width: at(gold) }} />
-                <span className="scale-band band-silver" style={{ left: at(gold), width: `calc(${at(silver)} - ${at(gold)})` }} />
-                <span className="scale-band band-bronze" style={{ left: at(silver), right: 0 }} />
-                <span className="scale-marker" style={{ left: at(value) }}><span>You {value.toLocaleString("en-US")}</span></span>
-            </div>
-            <div className="scale-labels">
-                <span style={{ left: at(gold) }}>Reference {gold.toLocaleString("en-US")}</span>
-                <span style={{ left: at(silver) }}>1.5× {silver.toLocaleString("en-US")}</span>
-            </div>
-        </div>
-    );
-}
-
-// The two counts that measure an accepted program, side by side. Selecting
-// one shows where it stands: among other students once enough have solved
-// the problem, otherwise against the reference solution's medal bands.
-export function Performance({ score, ranking, graderMain }) {
+// The two counts that measure an accepted program, side by side, LeetCode
+// style. Selecting one charts it: among other students once enough have
+// solved the problem, and against the reference solution always.
+export function Performance({ score, ranking, user }) {
     const [selected, setSelected] = useState("instructions");
     const metric = METRIC_INFO.find((item) => item.key === selected);
+    const ranked = Boolean(ranking?.ranked);
     return (
         <section className="performance" aria-label="Performance">
             <div className="metric-cards" role="tablist" aria-label="Measure">
-                {METRIC_INFO.map((item) => {
-                    const rank = ranking?.[item.key];
-                    return (
-                        <button key={item.key} type="button" role="tab" aria-selected={selected === item.key}
-                            className="metric-card" onClick={() => setSelected(item.key)}>
-                            <span className="metric-label">{item.label}</span>
-                            <span className="metric-value">
-                                <strong>{score[item.key].toLocaleString("en-US")}</strong>
-                                {rank
-                                    ? <span className="metric-compare">Beats <b>{rank.beats}%</b></span>
-                                    : <span className="metric-compare">Reference {score.reference[item.key].toLocaleString("en-US")}</span>}
-                            </span>
-                        </button>
-                    );
-                })}
+                {METRIC_INFO.map((item) => (
+                    <button key={item.key} type="button" role="tab" aria-selected={selected === item.key}
+                        className="metric-card" onClick={() => setSelected(item.key)}>
+                        <span className="metric-label"><Icon name={item.icon} size={15} /> {item.label}</span>
+                        <span className="metric-value">
+                            <strong>{score[item.key].toLocaleString("en-US")}</strong>
+                            <span className="metric-unit">{item.unit}</span>
+                            <span className="metric-divider" aria-hidden="true" />
+                            {ranked
+                                ? <span className="metric-compare">Beats <b>{ranking[item.key].beats}%</b></span>
+                                : <span className="metric-compare">Reference <b>{score.reference[item.key].toLocaleString("en-US")}</b></span>}
+                        </span>
+                    </button>
+                ))}
             </div>
-            <div className="metric-detail" role="tabpanel">
-                {ranking
-                    ? <Distribution metric={metric} data={ranking[selected]} />
-                    : <ReferenceScale metric={metric} value={score[selected]} reference={score.reference} />}
-            </div>
-            <p className="performance-medal">
-                <MedalBadge medal={score.medal}>{medalLabel(score.medal)}</MedalBadge>
-                <span>{MEDALS[score.medal]?.rule}.{graderMain ? " Only your code is counted, not the grader’s main." : ""}</span>
-            </p>
+            {ranking && (
+                <div className="metric-detail" role="tabpanel">
+                    <Distribution key={selected} metric={metric} data={ranking[selected]} ranked={ranked}
+                        threshold={ranking.threshold} user={user} />
+                </div>
+            )}
         </section>
     );
 }

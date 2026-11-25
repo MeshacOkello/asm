@@ -25,9 +25,9 @@ const blocked = {
     removeItem() { throw new Error('SecurityError'); },
 };
 
-const accepted = (medal, instructions, memory_accesses) => ({
+const accepted = (instructions, memory_accesses) => ({
     verdict: 'accepted',
-    score: { medal, instructions, memory_accesses, reference: { instructions: 1, memory_accesses: 1 } },
+    score: { instructions, memory_accesses, reference: { instructions: 1, memory_accesses: 1 } },
 });
 
 test('drafts are kept per problem', () => {
@@ -64,22 +64,22 @@ test('a run or a failed submission marks the problem attempted', () => {
 
 test('an accepted submission solves the problem and keeps the best result', () => {
     const storage = memoryStorage();
-    let progress = recordSubmission('p', accepted('bronze', 900, 90), storage);
+    let progress = recordSubmission('p', accepted(900, 90), storage);
     assert.equal(progressStatus(progress), 'solved');
-    assert.deepEqual(progress.best, { medal: 'bronze', instructions: 900, memory_accesses: 90 });
+    assert.deepEqual(progress.best, { instructions: 900, memory_accesses: 90 });
 
-    progress = recordSubmission('p', accepted('gold', 950, 95), storage);
-    assert.equal(progress.best.medal, 'gold');
-    // A worse result later does not replace it.
-    progress = recordSubmission('p', accepted('silver', 10, 1), storage);
-    assert.equal(progress.best.medal, 'gold');
+    progress = recordSubmission('p', accepted(500, 95), storage);
+    assert.deepEqual(progress.best, { instructions: 500, memory_accesses: 95 });
+    // A result with more instructions later does not replace it.
+    progress = recordSubmission('p', accepted(600, 1), storage);
+    assert.equal(progress.best.instructions, 500);
     // Nor does a failed one unsolve it.
     progress = recordSubmission('p', { verdict: 'runtime_error' }, storage);
     assert.equal(progressStatus(progress), 'solved');
-    assert.deepEqual(loadProgress('p', storage).best, { medal: 'gold', instructions: 950, memory_accesses: 95 });
-    // The same medal with lower totals does.
-    progress = recordSubmission('p', accepted('gold', 900, 95), storage);
-    assert.equal(progress.best.instructions, 900);
+    assert.deepEqual(loadProgress('p', storage).best, { instructions: 500, memory_accesses: 95 });
+    // As many instructions and fewer memory accesses does.
+    progress = recordSubmission('p', accepted(500, 90), storage);
+    assert.equal(progress.best.memory_accesses, 90);
 });
 
 test('stored values that are not ours are ignored', () => {
@@ -88,15 +88,15 @@ test('stored values that are not ours are ignored', () => {
         [key('a', 'draft')]: '{not json',
         [key('b', 'draft')]: '42',
         [key('c', 'progress')]: '"solved"',
-        [key('d', 'progress')]: JSON.stringify({ solved: true, best: { medal: 'platinum', instructions: 1, memory_accesses: 1 } }),
-        [key('e', 'progress')]: JSON.stringify({ solved: true, attempted: true, best: { medal: 'gold', instructions: -1, memory_accesses: 1 } }),
+        [key('d', 'progress')]: JSON.stringify({ solved: 'yes', best: { instructions: 1, memory_accesses: 1 } }),
+        [key('e', 'progress')]: JSON.stringify({ solved: true, attempted: true, best: { instructions: -1, memory_accesses: 1 } }),
     });
     assert.equal(loadDraft('a', storage), null);
     assert.equal(loadDraft('b', storage), null);
     assert.equal(progressStatus(loadProgress('c', storage)), null);
-    // "Solved" without a valid best result is not trusted.
-    assert.deepEqual(loadProgress('d', storage), { attempted: false, solved: false, best: null });
-    assert.deepEqual(loadProgress('e', storage), { attempted: true, solved: false, best: null });
+    // "Solved" must be exactly true, and a malformed best result is dropped.
+    assert.deepEqual(loadProgress('d', storage), { attempted: false, solved: false, best: { instructions: 1, memory_accesses: 1 } });
+    assert.deepEqual(loadProgress('e', storage), { attempted: true, solved: true, best: null });
 });
 
 test('blocked storage never throws', () => {
@@ -105,7 +105,7 @@ test('blocked storage never throws', () => {
     assert.doesNotThrow(() => clearDraft('p', blocked));
     assert.deepEqual(loadProgress('p', blocked), { attempted: false, solved: false, best: null });
     assert.equal(progressStatus(recordAttempt('p', blocked)), 'attempted');
-    assert.equal(progressStatus(recordSubmission('p', accepted('gold', 1, 1), blocked)), 'solved');
+    assert.equal(progressStatus(recordSubmission('p', accepted(1, 1), blocked)), 'solved');
 });
 
 test('no storage at all is the same as empty storage', () => {
@@ -145,12 +145,12 @@ test('collecting this browser\'s data for the one-time import', () => {
     assert.equal(hasLocalData(collectLocalData(storage)), false);
     saveDraft('sum-to-n', 'sumToN:\n        ret\n', storage, 99);
     saveDraft('blank', '   \n', storage, 5);
-    recordSubmission('array-max', accepted('gold', 5, 2), storage);
+    recordSubmission('array-max', accepted(5, 2), storage);
     recordAttempt('string-length', storage);
     const data = collectLocalData(storage);
     assert.deepEqual(data.drafts, { 'sum-to-n': { code: 'sumToN:\n        ret\n', updated_at: 99 } });
     assert.deepEqual(Object.keys(data.progress).sort(), ['array-max', 'string-length']);
-    assert.equal(data.progress['array-max'].best.medal, 'gold');
+    assert.equal(data.progress['array-max'].best.instructions, 5);
     assert.equal(hasLocalData(data), true);
     assert.deepEqual(collectLocalData(blocked), { drafts: {}, progress: {} });
 });

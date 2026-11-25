@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ErrorMessage from "./ErrorMessage";
 import Icon from "./Icon";
 import { CasePills, CaseView, CodeView, DiffView, OpenButton, Performance } from "./ChallengeResults";
+import { Avatar } from "./UserMenu";
 import { accountApi, loginUrl } from "../account";
 import { failureFrom } from "../challenges/problems";
 import { attemptLabel, formatTimestamp, isJudging, visualizerTest } from "../challenges/submissions";
@@ -56,6 +57,27 @@ function CodeSection({ submission }) {
     );
 }
 
+// Copies this submission's address, for the student's own later use: other
+// people cannot open it.
+function CopyLink() {
+    const [copied, setCopied] = useState(false);
+    async function copy() {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch {
+            // Clipboard refused: nothing to show.
+        }
+    }
+    return (
+        <button type="button" className="icon-button" onClick={copy} aria-label="Copy link to this submission"
+            title={copied ? "Link copied" : "Copy link to this submission"}>
+            <Icon name={copied ? "check" : "link"} size={15} />
+        </button>
+    );
+}
+
 export default function SubmissionResult({ id, user, problem, formats, onOpen, onEditAndResubmit }) {
     const [submission, setSubmission] = useState(null);
     const [error, setError] = useState(null);
@@ -93,7 +115,12 @@ export default function SubmissionResult({ id, user, problem, formats, onOpen, o
     if (error) return <ErrorMessage error={error} formats={formats} />;
     if (!submission) return <p className="challenge-loading">Loading submission…</p>;
 
-    const back = <a className="result-back" href={`#/problems/${submission.slug}/submissions`}><Icon name="back" size={15} /> All submissions</a>;
+    const back = (
+        <div className="result-bar">
+            <a className="result-back" href={`#/problems/${submission.slug}/submissions`}><Icon name="back" size={15} /> All submissions</a>
+            <CopyLink />
+        </div>
+    );
     if (isJudging(submission)) {
         return <div className="submission-result">
             {back}
@@ -107,7 +134,6 @@ export default function SubmissionResult({ id, user, problem, formats, onOpen, o
     const visible = results.filter((result) => result.visible);
     const focus = chosen ?? (submission.first_failure != null && results[submission.first_failure]?.visible
         ? results[submission.first_failure] : visualizerTest(results));
-    const graderMain = results.some((result) => result.harness);
     const firstHidden = submission.first_failure != null && !results[submission.first_failure].visible
         ? results[submission.first_failure] : null;
     const open = (test, button) => onOpen(test, button, submission.code);
@@ -122,7 +148,8 @@ export default function SubmissionResult({ id, user, problem, formats, onOpen, o
                         <span className="result-count">{submission.passed} / {submission.total} testcases passed</span>
                     </h2>
                     <p className="result-meta">
-                        {user?.name} submitted at {formatTimestamp(submission.created_at)}
+                        {user && <Avatar user={user} className="meta-avatar" />}
+                        <strong>{user?.name}</strong> submitted at {formatTimestamp(submission.created_at)}
                     </p>
                 </div>
                 <div className="result-actions">
@@ -140,7 +167,7 @@ export default function SubmissionResult({ id, user, problem, formats, onOpen, o
             )}
 
             {accepted && submission.score && (
-                <Performance score={submission.score} ranking={submission.ranking} graderMain={graderMain} />
+                <Performance score={submission.score} ranking={submission.ranking} user={user} />
             )}
 
             {!accepted && results.length > 0 && (

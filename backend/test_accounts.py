@@ -33,6 +33,11 @@ def id_token(**claims):
     return f'{encode({"alg": "RS256"})}.{encode(body)}.signature'
 
 
+def reference_instructions(slug):
+    from app import REFERENCE_TOTALS
+    return REFERENCE_TOTALS[slug]['instructions']
+
+
 def slower_sum(extra):
     """sum-to-n's reference with `extra` wasted instructions per call."""
     body = SUM_TO_N['reference'].split('sumToN:\n', 1)[1]
@@ -182,9 +187,13 @@ class SubmissionTests(unittest.TestCase):
         self.assertEqual((data['status'], data['verdict'], data['passed'], data['total']),
                          ('done', 'accepted', 8, 8))
         self.assertEqual(data['code'], SUM_TO_N['reference'])
-        self.assertEqual(data['score']['medal'], 'gold')
+        self.assertEqual(data['score']['reference']['instructions'], data['instructions'])
         self.assertEqual(data['instructions'], data['score']['reference']['instructions'])
-        self.assertIsNone(data['ranking'])   # too few students yet
+        # Too few students to rank: a chart of this attempt and the reference only.
+        self.assertFalse(data['ranking']['ranked'])
+        chart = data['ranking']['instructions']['distribution']
+        self.assertEqual(sum(bar['users'] for bar in chart['bars']), 0)
+        self.assertEqual(chart['yours'], chart['reference'])
         self.assertIsNone(data['first_failure'])
 
     def test_failed_submission_points_at_the_first_failing_test(self):
@@ -358,7 +367,16 @@ class StreakTests(unittest.TestCase):
 class RankingTests(unittest.TestCase):
     def test_hidden_below_the_threshold(self):
         accepted = [(user, 10, 1) for user in range(9)]
-        self.assertIsNone(rankings.ranking({'instructions': 5, 'memory_accesses': 0}, 0, accepted, 10))
+        result = rankings.ranking({'instructions': 5, 'memory_accesses': 0}, 0, accepted, 10,
+                                  {'instructions': 7, 'memory_accesses': 0})
+        self.assertFalse(result['ranked'])
+        self.assertNotIn('beats', result['instructions'])
+        # No other student's result appears below the threshold.
+        bars = result['instructions']['distribution']['bars']
+        self.assertEqual(sum(bar['users'] for bar in bars), 0)
+        self.assertNotIn(10, [value for bar in bars if bar['users'] for value in (bar['low'], bar['high'])])
+        reference = bars[result['instructions']['distribution']['reference']]
+        self.assertTrue(reference['low'] <= 7 <= reference['high'])
 
     def test_counts_only_strictly_worse_best_results(self):
         # Users 1-10; user 0 is the owner. Each user's best is by instructions,
@@ -382,15 +400,32 @@ class RankingTests(unittest.TestCase):
         result = rankings.histogram([10, 10, 12, 40], 11)
         bars = result['bars']
         self.assertEqual(sum(bar['users'] for bar in bars), 4)
-        self.assertEqual((bars[0]['low'], bars[-1]['high'] >= 40), (10, True))
         yours = bars[result['yours']]
         self.assertTrue(yours['low'] <= 11 <= yours['high'])
-        self.assertLessEqual(len(bars), rankings.MAX_BARS)
+        self.assertLessEqual(len(bars), rankings.MAX_BARS + 1)
         wide = rankings.histogram(list(range(0, 10_000, 7)), 5000)
-        self.assertLessEqual(len(wide['bars']), rankings.MAX_BARS)
+        self.assertLessEqual(len(wide['bars']), rankings.MAX_BARS + 1)
         self.assertEqual(sum(bar['users'] for bar in wide['bars']), len(range(0, 10_000, 7)))
+        # A lone value still gets a baseline of at least MIN_SPAN values.
         single = rankings.histogram([5, 5], 5)
-        self.assertEqual(single, {'bars': [{'low': 5, 'high': 5, 'users': 2}], 'yours': 0})
+        self.assertEqual(sum(bar['users'] for bar in single['bars']), 2)
+        self.assertGreaterEqual(single['bars'][-1]['high'] - single['bars'][0]['low'] + 1, rankings.MIN_SPAN)
+        self.assertEqual(single['bars'][0]['low'], 0)
+        self.assertEqual(single['bars'][single['yours']], {'low': 5, 'high': 5, 'users': 2})
+
+    def test_far_outliers_share_one_last_bar(self):
+        bunched = [100, 101, 101, 102, 103, 104, 105, 106]
+        result = rankings.histogram(bunched + [900, 950], 102)
+        bars = result['bars']
+        self.assertEqual(bars[-1], {'low': bars[-2]['high'] + 1, 'high': 950, 'users': 2, 'overflow': True})
+        # The bunch gets one bar per value instead of sharing a wide one.
+        self.assertTrue(all(bar['low'] == bar['high'] for bar in bars[:-1]))
+        self.assertEqual(sum(bar['users'] for bar in bars), 10)
+        self.assertEqual(bars[result['yours']]['low'], 102)
+        # An attempt in the tail is never hidden in the overflow bar.
+        far = rankings.histogram(bunched + [900], 900)
+        self.assertEqual(far['bars'][far['yours']]['high'], 900)
+        self.assertNotIn('overflow', far['bars'][-1])
 
     def test_threshold_is_configurable(self):
         with mock.patch.dict(os.environ, {'RANKING_MIN_USERS': '3'}):
@@ -407,7 +442,7 @@ class RankingTests(unittest.TestCase):
                 testing.submit(other, 'sum-to-n', slower_sum(extra))
             testing.sign_in(client, 'Me')
             below = testing.submit(client, 'recursive-factorial', FACT['reference']).get_json()
-            self.assertIsNone(below['ranking'])
+            self.assertFalse(below['ranking']['ranked'])
             mine = testing.submit(client, 'sum-to-n', slower_sum(1)).get_json()
         ranking = mine['ranking']
         self.assertEqual((ranking['users'], ranking['compared']), (4, 3))
@@ -415,7 +450,7 @@ class RankingTests(unittest.TestCase):
         self.assertEqual((ranking['instructions']['beats'], ranking['instructions']['worse']), (66, 2))
         self.assertEqual((ranking['memory_accesses']['beats'], ranking['memory_accesses']['worse']), (0, 0))
         self.assertEqual(sum(bar['users'] for bar in ranking['instructions']['distribution']['bars']), 3)
-        self.assertEqual(mine['score']['medal'], 'silver')
+        self.assertNotIn('medal', mine['score'])
 
 
 class ImportAndDraftTests(unittest.TestCase):
@@ -429,9 +464,9 @@ class ImportAndDraftTests(unittest.TestCase):
             'drafts': {'sum-to-n': {'code': 'sumToN:\n        ret\n'}, 'nope': {'code': 'x'}},
             'progress': {
                 'array-max': {'attempted': True, 'solved': True,
-                              'best': {'medal': 'gold', 'instructions': 5, 'memory_accesses': 2}},
+                              'best': {'instructions': 5, 'memory_accesses': 2}},
                 'string-length': {'attempted': True, 'solved': False, 'best': None},
-                'not-a-problem': {'solved': True, 'best': {'medal': 'gold'}},
+                'not-a-problem': {'solved': True, 'best': {'instructions': 1, 'memory_accesses': 1}},
             },
         }
         result = self.client.post('/api/import', json=payload).get_json()
@@ -440,7 +475,7 @@ class ImportAndDraftTests(unittest.TestCase):
         self.assertFalse(self.client.get('/api/me').get_json()['user']['can_import'])
 
         progress = self.client.get('/api/progress').get_json()['progress']
-        self.assertEqual(progress['array-max']['best']['medal'], 'gold')
+        self.assertEqual(progress['array-max']['best'], {'instructions': 5, 'memory_accesses': 2})
         self.assertEqual(progress['array-max']['source'], 'imported')
         self.assertFalse(progress['string-length']['solved'])
         profile = self.client.get('/api/profile').get_json()
@@ -453,10 +488,11 @@ class ImportAndDraftTests(unittest.TestCase):
 
     def test_a_graded_solve_replaces_the_imported_one(self):
         self.client.post('/api/import', json={'progress': {'sum-to-n': {
-            'solved': True, 'best': {'medal': 'bronze', 'instructions': 1, 'memory_accesses': 1}}}})
+            'solved': True, 'best': {'instructions': 1, 'memory_accesses': 1}}}})
         testing.submit(self.client, 'sum-to-n', SUM_TO_N['reference'])
         entry = self.client.get('/api/progress').get_json()['progress']['sum-to-n']
-        self.assertEqual((entry['source'], entry['best']['medal']), ('server', 'gold'))
+        self.assertEqual(entry['source'], 'server')
+        self.assertEqual(entry['best']['instructions'], reference_instructions('sum-to-n'))
 
     def test_declining_also_ends_the_offer(self):
         self.client.post('/api/import', json={'decline': True})

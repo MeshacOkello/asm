@@ -60,3 +60,42 @@ export function localTimeZone() {
         return "UTC";
     }
 }
+
+const MAX_TICKS = 6;
+
+// A y axis step that keeps the chart to a few gridlines, as LeetCode's do:
+// 5% steps for a flat chart, 10% up to 30%, then 25%.
+function yStep(top) {
+    if (top <= 15) return 5;
+    if (top <= 30) return 10;
+    return 25;
+}
+
+// The distribution chart's layout for the bars from `start` to `end`: each
+// bar as a share of all the students counted, a y axis with a few round
+// gridlines, and at most six evenly spaced x labels.
+export function chartLayout(distribution, start = 0, end = distribution.bars.length - 1) {
+    const { bars, yours, reference } = distribution;
+    const total = bars.reduce((sum, bar) => sum + bar.users, 0);
+    const shown = bars.slice(start, end + 1);
+    const shares = shown.map((bar) => (total ? (bar.users / total) * 100 : 0));
+    const top = Math.max(0, ...shares);
+    const step = yStep(top);
+    const yMax = Math.min(100, Math.max(step, Math.ceil(top / step) * step));
+    const tickStep = Math.max(1, Math.ceil(shown.length / MAX_TICKS));
+    const last = shown.length - 1;
+    const overflowShown = Boolean(shown.at(-1)?.overflow);
+    return {
+        empty: total === 0,
+        yMax,
+        gridlines: Array.from({ length: yMax / step + 1 }, (_, index) => index * step),
+        bars: shown.map((bar, offset) => ({
+            ...bar, index: start + offset, share: shares[offset], height: (shares[offset] / yMax) * 100,
+            yours: start + offset === yours, reference: start + offset === reference,
+        })),
+        // The overflow bar, past the bulk of results, is always labelled "N+".
+        ticks: shown.map((bar, offset) => ({ index: offset, label: bar.low, overflow: Boolean(bar.overflow) }))
+            .filter(({ index, overflow }) => overflow
+                || (index % tickStep === 0 && !(overflowShown && index > last - tickStep))),
+    };
+}

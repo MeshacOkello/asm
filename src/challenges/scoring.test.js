@@ -1,32 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    compareToReference, isBetterResult, medalLabel, medalRank, medalThresholds, normalizeMedal,
-    resultHeadline, scoreRows, statusText, verdictLabel,
+    compareToReference, isBetterResult, resultHeadline, scoreRows, statusText, verdictLabel,
 } from './scoring.js';
 
-const result = (medal, instructions, memory_accesses) => ({ medal, instructions, memory_accesses });
+const result = (instructions, memory_accesses) => ({ instructions, memory_accesses });
 
-test('medal labels and ranks, with unknown medals ignored', () => {
-    assert.equal(medalLabel('gold'), 'Gold');
-    assert.equal(medalLabel('bronze'), 'Bronze');
-    assert.equal(medalLabel('platinum'), null);
-    assert.equal(medalLabel('toString'), null);
-    assert.ok(medalRank('gold') > medalRank('silver'));
-    assert.ok(medalRank('silver') > medalRank('bronze'));
-    assert.equal(medalRank(undefined), 0);
-    assert.equal(normalizeMedal('silver'), 'silver');
-    assert.equal(normalizeMedal(null), null);
-});
-
-test('a higher medal is better, then lower combined totals', () => {
-    assert.ok(isBetterResult(result('bronze', 900, 90), null));
-    assert.ok(isBetterResult(result('gold', 900, 90), result('silver', 10, 1)));
-    assert.ok(!isBetterResult(result('silver', 10, 1), result('gold', 900, 90)));
-    assert.ok(isBetterResult(result('silver', 100, 9), result('silver', 100, 10)));
-    assert.ok(!isBetterResult(result('silver', 100, 10), result('silver', 100, 10)));
-    assert.ok(!isBetterResult(result('wooden', 1, 1), null));
-    assert.ok(!isBetterResult(null, result('gold', 1, 1)));
+test('fewer instructions is better; memory accesses break a tie', () => {
+    assert.ok(isBetterResult(result(900, 90), null));
+    assert.ok(isBetterResult(result(10, 500), result(11, 0)));
+    assert.ok(!isBetterResult(result(11, 0), result(10, 500)));
+    assert.ok(isBetterResult(result(100, 9), result(100, 10)));
+    assert.ok(!isBetterResult(result(100, 10), result(100, 10)));
+    assert.ok(!isBetterResult(null, result(1, 1)));
+    assert.ok(!isBetterResult({ instructions: 'many' }, null));
 });
 
 test('comparison with the reference', () => {
@@ -42,7 +29,7 @@ test('comparison with the reference', () => {
 
 test('score rows for an accepted submission', () => {
     const rows = scoreRows({
-        instructions: 30, memory_accesses: 4, medal: 'silver',
+        instructions: 30, memory_accesses: 4,
         reference: { instructions: 27, memory_accesses: 4 },
     });
     assert.deepEqual(rows.map((row) => [row.key, row.yours, row.reference, row.comparison.better]), [
@@ -51,15 +38,6 @@ test('score rows for an accepted submission', () => {
     ]);
     assert.deepEqual(scoreRows(null), []);
     assert.deepEqual(scoreRows({ instructions: 1 }), []);
-});
-
-test('medal thresholds match the backend rule', () => {
-    assert.deepEqual(medalThresholds({ instructions: 27, memory_accesses: 0 }), {
-        gold: { instructions: 27, memory_accesses: 0 },
-        silver: { instructions: 40, memory_accesses: 0 },
-    });
-    assert.deepEqual(medalThresholds({ instructions: 100, memory_accesses: 21 }).silver,
-        { instructions: 150, memory_accesses: 31 });
 });
 
 test('result headlines', () => {
@@ -74,7 +52,7 @@ test('result headlines', () => {
 });
 
 test('list status text', () => {
-    assert.equal(statusText({ solved: true, attempted: true, best: result('gold', 1, 1) }), 'Solved · Gold');
+    assert.equal(statusText({ solved: true, attempted: true, best: result(1, 1) }), 'Solved');
     assert.equal(statusText({ solved: false, attempted: true, best: null }), 'Attempted');
     assert.equal(statusText({ solved: false, attempted: false, best: null }), 'Not started');
     assert.equal(statusText(null), 'Not started');

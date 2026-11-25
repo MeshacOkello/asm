@@ -1,20 +1,13 @@
 /* Challenges: the problem list and the workspace. Built from the app's own
-   tokens, panels, tables and buttons; only pass/fail and medal colours are new. */
+   tokens, panels, tables and buttons; only the pass, fail and amber tints are new. */
 
 .challenges-page,
 .challenge-page {
   --pass: #17723c;
   --pass-bg: #eef8f1;
   --pass-border: #a9d8b9;
-  --gold: #8a5a00;
-  --gold-bg: #fdf3d4;
-  --gold-border: #e9cf7f;
-  --silver: #4a5566;
-  --silver-bg: #eef1f5;
-  --silver-border: #c5ccd6;
-  --bronze: #8f4318;
-  --bronze-bg: #fbeee4;
-  --bronze-border: #e3bb9d;
+  --amber: #8a5a00;
+  --amber-bg: #fdf3d4;
 }
 
 /* Shared pieces ---------------------------------------------------------- */
@@ -22,15 +15,10 @@
 .challenge-loading { padding: 16px; color: var(--text); font-size: 14px; }
 .difficulty { font-size: 13.5px; font-weight: 500; white-space: nowrap; }
 .difficulty-easy { color: var(--pass); }
-.difficulty-medium { color: var(--gold); }
+.difficulty-medium { color: var(--amber); }
 .difficulty-hard { color: var(--error-program, #a3301c); }
 .tag-list { display: inline-flex; flex-wrap: wrap; gap: 5px; }
 .tag-chip { padding: 1px 8px; border-radius: 999px; background: rgb(0 10 32 / 5%); color: var(--text-h); font-size: 12px; line-height: 1.7; white-space: nowrap; }
-.medal { display: inline-flex; align-items: center; padding: 0 8px; border: 1px solid; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1.7; white-space: nowrap; }
-.medal::before { content: ""; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: currentColor; }
-.medal-gold { color: var(--gold); background: var(--gold-bg); border-color: var(--gold-border); }
-.medal-silver { color: var(--silver); background: var(--silver-bg); border-color: var(--silver-border); }
-.medal-bronze { color: var(--bronze); background: var(--bronze-bg); border-color: var(--bronze-border); }
 .challenge-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
 .status-solved { color: var(--pass); font-weight: 600; }
 .challenge-back { margin: 0; }
@@ -73,7 +61,7 @@
 .problem-rows > li:nth-child(even) .problem-row { background: rgb(0 0 0 / 2.5%); }
 .problem-row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto 5.5rem 4.5rem;
+  grid-template-columns: 24px minmax(0, 1fr) auto 4.5rem;
   align-items: center;
   gap: 14px;
   min-height: 44px;
@@ -87,11 +75,10 @@
 .problem-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .problem-title { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .problem-tags { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
-.problem-medal { display: flex; justify-content: flex-end; }
 .problem-row .difficulty { text-align: right; }
 .status-mark { display: grid; place-items: center; width: 20px; height: 20px; }
 .status-mark-solved { color: var(--pass); }
-.attempted-dot { width: 9px; height: 9px; border: 2px solid var(--gold); border-radius: 50%; background: linear-gradient(90deg, var(--gold) 50%, transparent 50%); }
+.attempted-dot { width: 9px; height: 9px; border: 2px solid var(--amber); border-radius: 50%; background: linear-gradient(90deg, var(--amber) 50%, transparent 50%); }
 .challenge-empty { padding: 18px 12px; color: var(--text); text-align: center; font-size: 14px; }
 
 /* Workspace: LeetCode's layout. White panes on the grey page, 8px apart;
@@ -161,7 +148,7 @@
 .description-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .difficulty-chip { padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.7; }
 .difficulty-chip-easy { background: var(--pass-bg); color: var(--pass); }
-.difficulty-chip-medium { background: var(--gold-bg); color: var(--gold); }
+.difficulty-chip-medium { background: var(--amber-bg); color: var(--amber); }
 .difficulty-chip-hard { background: var(--error-program-bg); color: var(--error-program); }
 .statement-body { display: flex; flex-direction: column; gap: 12px; color: var(--text-h); font-size: 14.5px; line-height: 1.65; }
 .statement-body h3 { margin-top: 8px; font-size: 14.5px; font-weight: 700; }
@@ -175,12 +162,13 @@
 
 /* Submissions list */
 .submission-list { display: flex; flex-direction: column; }
-.submission-row { display: grid; grid-template-columns: minmax(0, 1.6fr) 1fr 1fr 5.5rem; align-items: center; gap: 12px; min-height: 52px; padding: 4px 12px; border-radius: 8px; color: var(--text-h); font-size: 13.5px; text-decoration: none; }
+.submission-row { display: grid; grid-template-columns: 2rem minmax(0, 1.6fr) 1fr 1fr; align-items: center; gap: 12px; min-height: 52px; padding: 4px 12px; border-radius: 8px; color: var(--text-h); font-size: 13.5px; text-decoration: none; }
 a.submission-row:nth-child(odd) { background: rgb(0 0 0 / 2.5%); }
 a.submission-row:hover { background: rgb(0 10 32 / 6%); }
 .submission-row-head { min-height: 32px; color: var(--muted); font-size: 12.5px; font-weight: 500; }
 .submission-status { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .submission-when { color: var(--muted); font-size: 12px; }
+.submission-number { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
 .submission-metric { font: 13px var(--mono); font-variant-numeric: tabular-nums; }
 .result-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; color: var(--text); font-size: 14px; }
 
@@ -191,7 +179,7 @@ a.submission-row:hover { background: rgb(0 10 32 / 6%); }
 .console-verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .console-verdict strong { font-size: 19px; font-weight: 600; }
 .console-verdict span { color: var(--muted); font-size: 13px; }
-.console-verdict .console-stale { padding: 1px 8px; border-radius: 999px; background: var(--gold-bg); color: var(--gold); font-size: 12px; }
+.console-verdict .console-stale { padding: 1px 8px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); font-size: 12px; }
 button.pane-action { margin-left: 0; }
 
 .case-pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -218,12 +206,15 @@ button.open-test:hover:not(:disabled) { background: var(--accent-soft); filter: 
 
 /* Submission result, in the left pane */
 .submission-result { display: flex; flex-direction: column; gap: 16px; }
+.result-bar { display: flex; align-items: center; justify-content: space-between; margin: -16px -20px 0; padding: 6px 12px 6px 16px; border-bottom: 1px solid var(--border); }
 .result-back { display: inline-flex; align-items: center; gap: 6px; width: fit-content; color: var(--muted); font-size: 13.5px; text-decoration: none; }
 .result-back:hover { color: var(--heading-ink); }
 .result-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .result-verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 20px; font-weight: 600; }
 .result-count { color: var(--muted); font-size: 13px; font-weight: 400; }
-.result-meta { margin-top: 3px; color: var(--muted); font-size: 12.5px; }
+.result-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--muted); font-size: 12.5px; }
+.result-meta strong { color: var(--heading-ink); font-weight: 600; }
+.meta-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; font-size: 10px; }
 .result-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .result-actions button { height: 30px; padding: 0 12px; font-size: 13px; }
 .result-actions button.open-test { height: 30px; }
@@ -233,36 +224,53 @@ button.open-test:hover:not(:disabled) { background: var(--accent-soft); filter: 
 .metric-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 14px; border: 0; border-radius: 8px; background: none; text-align: left; }
 .metric-card:hover:not(:disabled) { background: rgb(0 10 32 / 4%); }
 .metric-card[aria-selected='true'] { background: rgb(0 10 32 / 5%); }
-.metric-label { color: var(--muted); font-size: 13px; font-weight: 500; }
-.metric-card[aria-selected='true'] .metric-label { color: var(--heading-ink); }
-.metric-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-.metric-value strong { color: var(--heading-ink); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metric-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.metric-card[aria-selected='true'] .metric-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.metric-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.metric-value strong { color: var(--muted); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metric-card[aria-selected='true'] .metric-value strong, .metric-card[aria-selected='true'] .metric-compare b { color: var(--muted); font-size: 18px; font-weight: 600; }
+.metric-unit { color: var(--muted); font-size: 13px; }
+.metric-divider { align-self: center; width: 1px; height: 14px; margin: 0 2px; background: var(--border-strong); }
 .metric-compare { color: var(--muted); font-size: 13px; }
-.metric-compare b { color: var(--heading-ink); font-size: 18px; font-weight: 600; }
+.metric-compare b { color: var(--muted); font-size: 18px; font-weight: 600; }
 .metric-detail { padding: 6px 16px 14px; }
-.performance-medal { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); color: var(--text); font-size: 13px; }
 
-.distribution { margin: 0; }
-.distribution-plot { position: relative; padding-top: 22px; }
-.distribution svg { display: block; width: 100%; height: 110px; }
-.bar-other { fill: rgb(0 10 32 / 14%); }
-.bar-yours { fill: var(--accent); }
-.distribution-you { position: absolute; top: 14px; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); }
-.distribution-you::before { content: ""; position: absolute; top: -4px; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--surface); }
-.you-label { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); color: var(--accent); font-size: 11.5px; font-weight: 600; }
-.distribution-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; color: var(--muted); font: 11.5px var(--mono); }
-.distribution-key { font-family: var(--sans); }
-.reference-scale { padding: 26px 0 22px; }
-.scale-track { position: relative; height: 10px; border-radius: 5px; background: var(--bronze-bg); }
-.scale-band { position: absolute; top: 0; bottom: 0; }
-.band-gold { left: 0; border-radius: 5px 0 0 5px; background: var(--gold-border); }
-.band-silver { background: var(--silver-border); }
-.band-bronze { border-radius: 0 5px 5px 0; background: var(--bronze-border); }
-.scale-marker { position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px; background: var(--heading-ink); }
-.scale-marker span { position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%); color: var(--heading-ink); font-size: 12px; font-weight: 600; white-space: nowrap; }
-.scale-labels { position: relative; height: 0; }
-.scale-labels span { position: absolute; top: 8px; transform: translateX(-50%); color: var(--muted); font-size: 11.5px; white-space: nowrap; }
-.scale-note { padding: 8px 0; color: var(--text); font-size: 13px; }
+.chart { --chart-bar: rgb(40 93 199 / 45%); margin: 0; padding: 30px 0 0 34px; }
+.chart-area { position: relative; height: 160px; }
+.chart-gridline { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid rgb(0 10 32 / 6%); }
+.chart-y { position: absolute; right: calc(100% + 8px); top: -7px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.chart-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; }
+.chart-column { position: relative; flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; justify-content: center; }
+/* An empty range is a short rounded stub, as on LeetCode's charts. */
+.chart-bar { width: 52%; max-width: 26px; height: 4px; border-radius: 3px 3px 1px 1px; background: var(--chart-bar); }
+.chart-dense .chart-bar { width: 3px; border-radius: 2px; }
+.chart-yours .chart-bar { background: var(--accent); }
+.chart-overflow .chart-bar { background: repeating-linear-gradient(135deg, var(--chart-bar) 0 3px, rgb(40 93 199 / 20%) 3px 6px); }
+.chart-overflow { margin-left: 4px; }
+.chart-marker { position: absolute; left: 50%; z-index: 1; transform: translate(-50%, -6px); display: flex; flex-direction: column; align-items: center; }
+.chart-dense .chart-marker::after { content: ""; width: 3px; height: 16px; border-radius: 2px; background: var(--accent); }
+.chart-avatar { width: 24px; height: 24px; border: 2px solid var(--accent); border-radius: 50%; background: var(--surface); object-fit: cover; font-size: 11px; }
+.chart-reference { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1.5px dashed rgb(0 10 32 / 35%); }
+.chart-reference span { position: absolute; top: -19px; left: 4px; padding: 0 3px; border-radius: 3px; background: var(--surface); color: var(--muted); font-size: 11px; white-space: nowrap; }
+.chart-yours .chart-reference span { left: 16px; }
+.chart-x { position: relative; height: 20px; margin-top: 8px; }
+.chart-x span { position: absolute; top: 0; transform: translateX(-50%); color: var(--muted); font-size: 11px; white-space: nowrap; }
+.chart-caption { margin-top: 4px; color: var(--muted); font-size: 12px; }
+
+/* Range selector: LeetCode's grey overview under the chart. */
+.chart-brush { position: relative; height: 38px; margin: 10px 0 6px; border-radius: 6px; background: rgb(0 10 32 / 3%); }
+.brush-bars { position: absolute; inset: 4px 0 4px; display: flex; align-items: flex-end; }
+.brush-column { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.brush-bar { width: 50%; max-width: 14px; border-radius: 2px 2px 0 0; background: rgb(0 10 32 / 12%); }
+.brush-in .brush-bar { background: rgb(0 10 32 / 22%); }
+.brush-window { position: absolute; top: -4px; bottom: -4px; border: 1px solid rgb(40 93 199 / 35%); border-radius: 5px; background: rgb(40 93 199 / 6%); pointer-events: none; }
+.brush-handle { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+.brush-handle::-webkit-slider-runnable-track { height: 100%; background: none; }
+.brush-handle::-moz-range-track { height: 100%; background: none; }
+.brush-handle::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 30px; margin-top: 4px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 12%); cursor: ew-resize; pointer-events: auto; }
+.brush-handle::-moz-range-thumb { width: 10px; height: 30px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface); cursor: ew-resize; pointer-events: auto; }
+.brush-handle:focus-visible { outline: none; }
+.brush-handle:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--focus); }
 
 .result-tests { display: flex; flex-direction: column; gap: 12px; }
 .hidden-failure { padding: 9px 12px; border-radius: 8px; background: var(--error-program-bg); color: var(--text-h); font-size: 13.5px; }
@@ -314,12 +322,11 @@ button.link-button:hover:not(:disabled) { background: none; color: var(--accent-
   .challenges-content { margin-top: 12px; padding: 0; }
   .problem-row { grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; padding: 8px 10px; }
   .problem-tags { display: none; }
-  .problem-medal { display: none; }
-  .pane-body { padding: 14px 14px 20px; }
+    .pane-body { padding: 14px 14px 20px; }
+  .result-bar { margin: -14px -14px 0; }
   .pane-action .open-label { display: none; }
   .metric-cards { grid-template-columns: 1fr; }
-  .submission-row { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .submission-row > :nth-child(4) { display: none; }
+  .submission-row { grid-template-columns: 1.6rem minmax(0, 1fr) auto auto; }
 }
 
 /* Accounts ---------------------------------------------------------------- */
@@ -380,7 +387,7 @@ td.history-time { display: table-cell; }
 .difficulty-bar { height: 8px; overflow: hidden; border-radius: 4px; background: var(--surface-head); }
 .difficulty-bar span { display: block; height: 100%; }
 .difficulty-bar-easy span { background: var(--pass); }
-.difficulty-bar-medium span { background: var(--gold); }
+.difficulty-bar-medium span { background: var(--amber); }
 .difficulty-bar-hard span { background: var(--error-program); }
 .difficulty-count { color: var(--text); font-variant-numeric: tabular-nums; }
 .unsolved-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }

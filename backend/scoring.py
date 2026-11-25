@@ -1,16 +1,11 @@
-"""Verdicts, totals and medals for a challenge submission. Pure functions only.
+"""Verdicts and totals for a challenge submission. Pure functions only.
 
 A test passes on an exact match, and a submission is Accepted only when every
-test passes. An accepted submission's instruction and memory-access totals
-over all tests are compared with the reference solution's:
-
-    gold    both totals at most the reference's
-    silver  both totals at most 1.5 times the reference's
-    bronze  any other accepted submission
+test passes. An accepted submission reports the instructions it executed and
+the memory accesses it made over all tests, next to the reference solution's
+totals for the same tests.
 """
 ACCEPTED = 'accepted'
-GOLD, SILVER, BRONZE = 'gold', 'silver', 'bronze'
-MEDALS = (GOLD, SILVER, BRONZE)
 METRICS = ('instructions', 'memory_accesses')
 
 
@@ -27,18 +22,16 @@ def totals(results):
     return {metric: sum(result[metric] for result in results) for metric in METRICS}
 
 
-def medal(score, reference):
-    """The medal for an accepted submission's totals against the reference's."""
-    if all(score[metric] <= reference[metric] for metric in METRICS):
-        return GOLD
-    # 1.5x compared in integers, so no total is rounded across the line.
-    if all(2 * score[metric] <= 3 * reference[metric] for metric in METRICS):
-        return SILVER
-    return BRONZE
+def better(candidate, current):
+    """Fewer instructions wins; fewer memory accesses breaks a tie."""
+    if current is None:
+        return True
+    return (candidate['instructions'], candidate['memory_accesses']) \
+        < (current['instructions'], current['memory_accesses'])
 
 
 def summarize(results, reference):
-    """The verdict, pass count and, when accepted, the score and medal."""
+    """The verdict, pass count and, when accepted, the totals and the reference's."""
     outcome = verdict(results)
     summary = {
         'verdict': outcome,
@@ -46,6 +39,5 @@ def summarize(results, reference):
         'total': len(results),
     }
     if outcome == ACCEPTED and reference is not None:
-        score = totals(results)
-        summary['score'] = {**score, 'reference': dict(reference), 'medal': medal(score, reference)}
+        summary['score'] = {**totals(results), 'reference': dict(reference)}
     return summary

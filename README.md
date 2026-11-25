@@ -75,19 +75,13 @@ The **Challenges** page (`#/problems`) is a set of graded problems. Each problem
 
 The workspace follows LeetCode's layout: the problem on the left, your code on the right, and a test console under the code that shows one visible test case at a time. After **Run**, the console opens on the first failing case and marks the register or output that differs from what was expected; **Open case N in visualizer** steps through exactly that case.
 
-A submission opens in the left pane (`#/problems/<slug>/submissions/<id>`) while the editor and console stay where they are. It shows *Judging…* until grading finishes, then the verdict, tests passed and submission time. An accepted attempt shows its instructions and memory accesses: against the reference solution's medal bands, or as a distribution of other students' results once enough have solved the problem. A failed attempt opens on its first failing visible test and lists every test; hidden tests show only why they failed. Below that is the submitted code, with **Compare with previous attempt** (any earlier attempt can be picked), and **Open in visualizer** and **Edit and resubmit**, which puts the submitted code back in the editor. Submissions are private to their owner.
+A submission opens in the left pane (`#/problems/<slug>/submissions/<id>`) while the editor and console stay where they are. It shows *Judging…* until grading finishes, then the verdict, tests passed and submission time. An accepted attempt shows its instructions and memory accesses on a LeetCode-style chart, with the reference solution marked; once enough students have solved the problem the chart also shows their results and how many you beat. A failed attempt opens on its first failing visible test and lists every test; hidden tests show only why they failed. Below that is the submitted code, with **Compare with previous attempt** (any earlier attempt can be picked), and **Open in visualizer** and **Edit and resubmit**, which puts the submitted code back in the editor. Submissions are private to their owner.
 
 The problem's **Submissions** tab lists your attempts. The **Profile** page (`#/profile`) shows problems solved overall and by difficulty, attempted problems not yet solved, recent submissions, and the current and longest streak: consecutive days, in your own time zone, with at least one accepted submission. A streak that reached yesterday stands for the rest of today.
 
 Signed-in drafts and progress are saved to the account. Progress made in a browser before signing in can be imported once; imported solves count in the solved record, but streaks and rankings come only from submissions graded on the server.
 
-An accepted submission is scored by the instructions it executed and the memory accesses (loads and stores) it made over all tests, against the reference solution's totals:
-
-| Medal | Rule |
-| --- | --- |
-| Gold | Both totals at most the reference's |
-| Silver | Both totals at most 1.5× the reference's |
-| Bronze | Any other accepted submission |
+An accepted submission is measured by the instructions it executed and the memory accesses (loads and stores) it made over all tests, shown next to the reference solution's totals. Your best result on a problem is the one with the fewest instructions, then the fewest memory accesses.
 
 Once at least `RANKING_MIN_USERS` students (default 10) have an accepted submission on a problem, an accepted attempt also shows how it ranks: "beats X% of students" for instructions and for memory accesses separately. Each other student counts once, by their best accepted result (fewest instructions, then fewest memory accesses), and only strictly worse results count as beaten. Below the threshold the reference comparison is shown instead.
 

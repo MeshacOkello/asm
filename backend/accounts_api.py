@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 # One grading thread: the grading worker process handles one job at a time,
 # and submissions are graded in the order they arrive.
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='judge')
-MEDAL_RANK = {scoring.GOLD: 3, scoring.SILVER: 2, scoring.BRONZE: 1}
 RECENT = 10
 HISTORY_LIMIT = 200
 
@@ -64,7 +63,7 @@ def judge(submission_id):
         connection.execute(update(db.submissions).where(db.submissions.c.id == submission_id).values(
             status='done', verdict=summary['verdict'], passed=summary['passed'],
             total=summary['total'], instructions=score.get('instructions'),
-            memory_accesses=score.get('memory_accesses'), medal=score.get('medal'),
+            memory_accesses=score.get('memory_accesses'),
             result_json=db.dumps(summary), finished_at=db.now_ms()))
 
 
@@ -126,7 +125,7 @@ def summary_row(row):
         'status': row.status, 'verdict': row.verdict,
         'verdict_label': verdict_label(row), 'passed': row.passed, 'total': row.total,
         'instructions': row.instructions, 'memory_accesses': row.memory_accesses,
-        'medal': row.medal, 'created_at': row.created_at,
+        'created_at': row.created_at,
     }
 
 
@@ -169,7 +168,8 @@ def show_submission(submission_id):
         if row.verdict == scoring.ACCEPTED and row.status == 'done':
             body['ranking'] = rankings.ranking(
                 {'instructions': row.instructions, 'memory_accesses': row.memory_accesses},
-                user.id, accepted_results(connection, row.slug), rankings.min_users())
+                user.id, accepted_results(connection, row.slug), rankings.min_users(),
+                challenges.REFERENCE_TOTALS.get(row.slug))
         earlier = connection.execute(
             select(db.submissions).where(db.submissions.c.user_id == user.id,
                                          db.submissions.c.slug == row.slug,
@@ -196,21 +196,11 @@ def problem_submissions(slug):
 
 # --- progress and profile -----------------------------------------------------
 
-def better(candidate, current):
-    if current is None:
-        return True
-    rank = MEDAL_RANK.get(candidate['medal'], 0) - MEDAL_RANK.get(current['medal'], 0)
-    if rank:
-        return rank > 0
-    total = lambda result: (result['instructions'] or 0) + (result['memory_accesses'] or 0)  # noqa: E731
-    return total(candidate) < total(current)
-
-
 def progress_for(connection, user_id):
     """Per problem: attempted, solved, and the best result, server and imported."""
     progress = {}
     rows = connection.execute(
-        select(db.submissions.c.slug, db.submissions.c.verdict, db.submissions.c.medal,
+        select(db.submissions.c.slug, db.submissions.c.verdict,
                db.submissions.c.instructions, db.submissions.c.memory_accesses)
         .where(db.submissions.c.user_id == user_id)).all()
     for row in rows:
@@ -218,9 +208,8 @@ def progress_for(connection, user_id):
                                                'best': None, 'source': 'server'})
         if row.verdict == scoring.ACCEPTED:
             entry['solved'] = True
-            result = {'medal': row.medal, 'instructions': row.instructions,
-                      'memory_accesses': row.memory_accesses}
-            if better(result, entry['best']):
+            result = {'instructions': row.instructions, 'memory_accesses': row.memory_accesses}
+            if scoring.better(result, entry['best']):
                 entry['best'] = result
     imported = connection.execute(select(db.imported_progress)
                                   .where(db.imported_progress.c.user_id == user_id)).all()
@@ -231,8 +220,8 @@ def progress_for(connection, user_id):
                                           'best': None, 'source': 'imported'}
         if row.solved and not entry['solved']:
             entry.update(solved=True, source='imported', best=(
-                {'medal': row.medal, 'instructions': row.instructions,
-                 'memory_accesses': row.memory_accesses} if row.medal else None))
+                {'instructions': row.instructions, 'memory_accesses': row.memory_accesses}
+                if row.instructions is not None else None))
     return {slug: entry for slug, entry in progress.items() if slug in challenges.PROBLEMS}
 
 
@@ -361,14 +350,15 @@ def import_local():
                 if slug not in challenges.PROBLEMS or not isinstance(entry, dict):
                     continue
                 best = entry.get('best') if isinstance(entry.get('best'), dict) else {}
-                medal = best.get('medal') if best.get('medal') in MEDAL_RANK else None
-                solved = entry.get('solved') is True and medal is not None
+                solved = entry.get('solved') is True
                 if not solved and entry.get('attempted') is not True:
                     continue
+                instructions, memory = _count(best.get('instructions')), _count(best.get('memory_accesses'))
+                counted = solved and instructions is not None and memory is not None
                 connection.execute(insert(db.imported_progress).values(
-                    user_id=user.id, slug=slug, solved=int(solved), medal=medal if solved else None,
-                    instructions=_count(best.get('instructions')) if solved else None,
-                    memory_accesses=_count(best.get('memory_accesses')) if solved else None,
+                    user_id=user.id, slug=slug, solved=int(solved),
+                    instructions=instructions if counted else None,
+                    memory_accesses=memory if counted else None,
                     imported_at=now))
                 imported['progress'] += 1
         connection.execute(update(db.users).where(db.users.c.id == user.id).values(imported_at=now))

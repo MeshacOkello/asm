@@ -108,3 +108,43 @@ test('routes', () => {
     assert.equal(routeFrom('#/how-to').page, 'guide');
     assert.equal(routeFrom('').page, 'visualizer');
 });
+
+test('chart layout: shares, a y axis in 25% steps, and spaced x labels', async () => {
+    const { chartLayout } = await import('./submissions.js');
+    const layout = chartLayout({
+        bars: [{ low: 10, high: 10, users: 3 }, { low: 11, high: 11, users: 0 }, { low: 12, high: 12, users: 1 }],
+        yours: 1,
+    });
+    assert.deepEqual(layout.bars.map((bar) => bar.share), [75, 0, 25]);
+    assert.equal(layout.yMax, 75);
+    assert.deepEqual(layout.gridlines, [0, 25, 50, 75]);
+    assert.deepEqual(layout.bars.map((bar) => Math.round(bar.height * 100) / 100), [100, 0, 33.33]);
+    assert.deepEqual(layout.bars.map((bar) => bar.yours), [false, true, false]);
+    assert.deepEqual(layout.ticks.map((tick) => tick.label), [10, 11, 12]);
+
+    const wide = chartLayout({ bars: Array.from({ length: 24 }, (_, i) => ({ low: i * 10, high: i * 10 + 9, users: 1 })), yours: 0 });
+    assert.equal(wide.yMax, 5);
+    assert.deepEqual(wide.gridlines, [0, 5]);
+    assert.ok(wide.ticks.length <= 6);
+    assert.equal(wide.ticks[0].label, 0);
+
+    const tail = chartLayout({ bars: [
+        { low: 1, high: 1, users: 2 }, { low: 2, high: 2, users: 1 }, { low: 3, high: 90, users: 1, overflow: true },
+    ], yours: 0 });
+    assert.deepEqual(tail.ticks.at(-1), { index: 2, label: 3, overflow: true });
+
+    const lonely = chartLayout({ bars: [{ low: 5, high: 5, users: 0 }], yours: 0, reference: 0 });
+    assert.equal(lonely.empty, true);
+    assert.equal(lonely.bars[0].height, 0);
+    assert.equal(lonely.bars[0].reference, true);
+
+    // LeetCode's memory chart: a 22% peak gets 10% steps up to 30%.
+    const memory = chartLayout({ bars: [{ low: 0, high: 0, users: 22 }, { low: 1, high: 1, users: 78 }], yours: 0 });
+    assert.equal(memory.yMax, 100);
+    const flatter = chartLayout({ bars: Array.from({ length: 5 }, (_, i) => ({ low: i, high: i, users: [22, 20, 20, 20, 18][i] })), yours: 0 });
+    assert.deepEqual(flatter.gridlines, [0, 10, 20, 30]);
+
+    // A window of the bars: shares stay out of everyone, indices stay absolute.
+    const windowed = chartLayout({ bars: [{ low: 1, high: 1, users: 1 }, { low: 2, high: 2, users: 3 }, { low: 3, high: 3, users: 0 }], yours: 2 }, 1, 2);
+    assert.deepEqual(windowed.bars.map((bar) => [bar.index, bar.share, bar.yours]), [[1, 75, false], [2, 0, true]]);
+});

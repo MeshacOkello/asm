@@ -56,7 +56,6 @@ submissions = Table(
     Column('total', Integer),
     Column('instructions', Integer),
     Column('memory_accesses', Integer),
-    Column('medal', String(16)),
     # The redacted, client-safe result: hidden tests carry only their number
     # and failure kind, so nothing secret is ever stored with a submission.
     Column('result_json', Text),
@@ -81,7 +80,6 @@ imported_progress = Table(
     Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
     Column('slug', String(100), nullable=False),
     Column('solved', Integer, nullable=False),
-    Column('medal', String(16)),
     Column('instructions', Integer),
     Column('memory_accesses', Integer),
     Column('imported_at', BigInteger, nullable=False),

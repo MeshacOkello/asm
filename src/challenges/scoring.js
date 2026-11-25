@@ -1,41 +1,17 @@
-// How a challenge result is described: verdicts, medals, and how a score
-// compares with the reference solution's. The backend decides the medal; this
-// only presents it, and ranks stored results to keep the best one.
-
-export const MEDALS = {
-    gold: { label: "Gold", rank: 3, rule: "At most the reference's instructions and memory accesses" },
-    silver: { label: "Silver", rank: 2, rule: "Within 1.5× the reference on both counts" },
-    bronze: { label: "Bronze", rank: 1, rule: "Accepted, but over 1.5× the reference on a count" },
-};
+// How a challenge result is described: verdicts, and how an accepted
+// program's counts compare with the reference solution's.
 
 export const METRICS = [
     { key: "instructions", label: "Instructions executed" },
     { key: "memory_accesses", label: "Memory accesses" },
 ];
 
-export function normalizeMedal(medal) {
-    return Object.hasOwn(MEDALS, medal ?? "") ? medal : null;
-}
-
-export function medalLabel(medal) {
-    return MEDALS[normalizeMedal(medal)]?.label ?? null;
-}
-
-export function medalRank(medal) {
-    return MEDALS[normalizeMedal(medal)]?.rank ?? 0;
-}
-
-function total(result) {
-    return result.instructions + result.memory_accesses;
-}
-
-// A higher medal wins; between equal medals, the smaller combined total.
+// Fewer instructions wins; fewer memory accesses breaks a tie, as in rankings.
 export function isBetterResult(candidate, current) {
-    if (!candidate || !normalizeMedal(candidate.medal)) return false;
+    if (!candidate || !Number.isInteger(candidate.instructions)) return false;
     if (!current) return true;
-    const byMedal = medalRank(candidate.medal) - medalRank(current.medal);
-    if (byMedal !== 0) return byMedal > 0;
-    return total(candidate) < total(current);
+    if (candidate.instructions !== current.instructions) return candidate.instructions < current.instructions;
+    return candidate.memory_accesses < current.memory_accesses;
 }
 
 // "Same as the reference", "4 fewer than the reference", or
@@ -60,14 +36,6 @@ export function scoreRows(score) {
         reference: score.reference[key],
         comparison: compareToReference(score[key], score.reference[key]),
     }));
-}
-
-// The largest totals that still earn each medal, for the hint under a score.
-export function medalThresholds(reference) {
-    return {
-        gold: { ...reference },
-        silver: Object.fromEntries(METRICS.map(({ key }) => [key, Math.floor((reference[key] * 3) / 2)])),
-    };
 }
 
 export const VERDICT_LABELS = {
@@ -97,9 +65,6 @@ export function resultHeadline(response) {
 
 // The status cell of the problem list.
 export function statusText(progress) {
-    if (progress?.solved) {
-        const medal = medalLabel(progress.best?.medal);
-        return medal ? `Solved · ${medal}` : "Solved";
-    }
+    if (progress?.solved) return "Solved";
     return progress?.attempted ? "Attempted" : "Not started";
 }

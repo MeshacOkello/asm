@@ -6,10 +6,9 @@ import Markdown from "./Markdown";
 import ReplaceCodeDialog from "./ReplaceCodeDialog";
 import SubmissionResult from "./SubmissionResult";
 import TestConsole from "./TestConsole";
-import { MedalBadge, Tags } from "./ChallengeList";
+import { Tags } from "./ChallengeList";
 import { failureFrom, difficultyLabel, requestJson, visualizerProgram } from "../challenges/problems";
 import { clearDraft, loadDraftRecord, loadProgress, recordAttempt, saveDraft } from "../challenges/storage";
-import { medalLabel } from "../challenges/scoring";
 import { relativeTime } from "../challenges/submissions";
 import { accountApi, loginUrl } from "../account";
 import "../challenges/challenges.css";
@@ -61,7 +60,6 @@ function Description({ problem, progress }) {
                 {progress.solved && (
                     <span className="solved-mark">
                         Solved <Icon name="check" size={15} />
-                        {progress.best && <MedalBadge medal={progress.best.medal}>{medalLabel(progress.best.medal)}</MedalBadge>}
                     </span>
                 )}
             </header>
@@ -107,20 +105,20 @@ function SubmissionHistory({ slug, user }) {
     return (
         <div className="submission-list" role="table" aria-label="Your submissions">
             <div className="submission-row submission-row-head" role="row">
+                <span role="columnheader"><span className="visually-hidden">Attempt</span></span>
                 <span role="columnheader">Status</span>
                 <span role="columnheader">Instructions</span>
-                <span role="columnheader">Memory</span>
-                <span role="columnheader">Medal</span>
+                <span role="columnheader">Memory accesses</span>
             </div>
-            {rows.map((row) => (
+            {rows.map((row, index) => (
                 <a key={row.id} className="submission-row" role="row" href={`#/problems/${slug}/submissions/${row.id}`}>
+                    <span role="cell" className="submission-number">{rows.length - index}</span>
                     <span role="cell" className="submission-status">
                         <VerdictText submission={row} />
-                        <span className="submission-when">{relativeTime(row.created_at)} · #{row.id}{row.total ? ` · ${row.passed}/${row.total}` : ""}</span>
+                        <span className="submission-when">{relativeTime(row.created_at)}{row.total ? ` · ${row.passed}/${row.total} tests` : ""}</span>
                     </span>
-                    <span role="cell" className="submission-metric">{row.instructions == null ? "—" : row.instructions.toLocaleString("en-US")}</span>
-                    <span role="cell" className="submission-metric">{row.memory_accesses == null ? "—" : row.memory_accesses.toLocaleString("en-US")}</span>
-                    <span role="cell">{row.medal ? <MedalBadge medal={row.medal}>{medalLabel(row.medal)}</MedalBadge> : ""}</span>
+                    <span role="cell" className="submission-metric">{row.instructions == null ? "N/A" : row.instructions.toLocaleString("en-US")}</span>
+                    <span role="cell" className="submission-metric">{row.memory_accesses == null ? "N/A" : row.memory_accesses.toLocaleString("en-US")}</span>
                 </a>
             ))}
         </div>

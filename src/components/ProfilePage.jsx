@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import ErrorMessage from "./ErrorMessage";
-import { DifficultyBadge, MedalBadge } from "./ChallengeList";
+import { DifficultyBadge } from "./ChallengeList";
 import { VerdictText } from "./ChallengeWorkspace";
 import { accountApi, loginUrl } from "../account";
 import { DIFFICULTIES, difficultyLabel, failureFrom } from "../challenges/problems";
 import { collectLocalData, hasLocalData } from "../challenges/storage";
-import { medalLabel } from "../challenges/scoring";
 import { localTimeZone, metricsText, relativeTime } from "../challenges/submissions";
 import "../challenges/challenges.css";
 
@@ -160,7 +159,7 @@ export default function ProfilePage({ user, onAccountChange }) {
                             : <div className="reference-table history-table">
                                 <table>
                                     <thead>
-                                        <tr><th scope="col">Problem</th><th scope="col">Verdict</th><th scope="col">Performance</th><th scope="col">Medal</th><th scope="col">When</th></tr>
+                                        <tr><th scope="col">Problem</th><th scope="col">Verdict</th><th scope="col">Performance</th><th scope="col">When</th></tr>
                                     </thead>
                                     <tbody>
                                         {profile.recent.map((row) => (
@@ -168,7 +167,6 @@ export default function ProfilePage({ user, onAccountChange }) {
                                                 <th scope="row"><a href={`#/problems/${row.slug}/submissions/${row.id}`}>{row.title}</a></th>
                                                 <td><VerdictText submission={row} /></td>
                                                 <td className="history-metrics">{metricsText(row)}</td>
-                                                <td>{row.medal ? <MedalBadge medal={row.medal}>{medalLabel(row.medal)}</MedalBadge> : "—"}</td>
                                                 <td className="history-time">{relativeTime(row.created_at)}</td>
                                             </tr>
                                         ))}
