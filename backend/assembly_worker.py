@@ -29,6 +29,10 @@ ASSEMBLY_TIMEOUT = float(os.environ.get('ASSEMBLY_TIMEOUT', '5'))
 
 _worker = None
 _lock = threading.Lock()
+# Grading has a process of its own, so a long submission never holds up the
+# visualizer's assembler, and a grading run that is killed does not take it.
+_grader = None
+_grader_lock = threading.Lock()
 
 
 class AssemblyTimeout(Exception):
@@ -126,6 +130,35 @@ def assemble_in_worker(source, timeout=None):
     raise RuntimeError(f'assembly worker failed: {result}')
 
 
+class GradingTimeout(Exception):
+    """A grading job did not finish in time, so its process was replaced."""
+
+
+def grade_in_worker(job, timeout):
+    """Run grader.grade(**job) in the grading process, or raise GradingTimeout.
+
+    Each test inside the job has its own deadline, enforced by the simulator.
+    This timeout covers the whole job and is only reached when something the
+    simulator cannot interrupt, in practice Keystone, does not return.
+    """
+    global _grader
+    with _grader_lock:
+        if _grader is None or not _grader.alive():
+            _grader = _Worker()
+        worker = _grader
+        try:
+            outcome, result = worker.ask(('grade', job), timeout)
+        except (queue.Empty, EOFError, OSError) as error:
+            logger.error('Grading did not finish within %ss (%s); replacing the worker',
+                         timeout, type(error).__name__)
+            worker.stop()
+            _grader = None
+            raise GradingTimeout(timeout) from None
+    if outcome == 'graded':
+        return result
+    raise RuntimeError(f'grading worker failed: {result}')
+
+
 def timeout_error(timeout=None):
     """The error shown when the assembler could not finish."""
     timeout = ASSEMBLY_TIMEOUT if timeout is None else timeout
@@ -142,8 +175,12 @@ def timeout_error(timeout=None):
 
 def shutdown():
     """Stop the worker, for tests and for a clean exit."""
-    global _worker
+    global _worker, _grader
     with _lock:
         if _worker is not None:
             _worker.stop()
             _worker = None
+    with _grader_lock:
+        if _grader is not None:
+            _grader.stop()
+            _grader = None

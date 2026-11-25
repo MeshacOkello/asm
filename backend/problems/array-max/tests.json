@@ -1,0 +1,11 @@
+[
+  {"id": "mixed", "visible": true, "input": {"arr": [3, 1, 4, 1, 5], "n": 5}, "expected": {"x0": 5}},
+  {"id": "all-negative", "visible": true, "input": {"arr": [-3, -1, -7], "n": 3}, "expected": {"x0": -1}},
+  {"id": "single", "visible": true, "input": {"arr": [42], "n": 1}, "expected": {"x0": 42}},
+  {"id": "max-first", "visible": false, "input": {"arr": [9, 1, 2, 8], "n": 4}, "expected": {"x0": 9}},
+  {"id": "max-last", "visible": false, "input": {"arr": [1, 2, 3, 100], "n": 4}, "expected": {"x0": 100}},
+  {"id": "all-equal", "visible": false, "input": {"arr": [7, 7, 7, 7], "n": 4}, "expected": {"x0": 7}},
+  {"id": "extremes", "visible": false, "input": {"arr": [-9223372036854775808, 9223372036854775807, 0], "n": 3}, "expected": {"x0": 9223372036854775807}},
+  {"id": "signed-compare", "visible": false, "input": {"arr": [-1, -9223372036854775808, -2], "n": 3}, "expected": {"x0": -1}},
+  {"id": "long-array", "visible": false, "input": {"arr": [-50, -13, 24, -40, -3, 34, -30, 7, 44, -20, 17, -47, -10, 27, -37, 0, 37, -27, 10, 47, -17, 20, -44, -7, 30, -34, 3, 40, -24, 13, 50, -14, 23, -41, -4, 33, -31, 6, 43, -21, 16, -48, -11, 26, -38, -1, 36, -28, 9, 46, -18, 19, -45, -8, 29, -35, 2, 39, -25, 12, 49, -15, 22, -42], "n": 64}, "expected": {"x0": 50}}
+]

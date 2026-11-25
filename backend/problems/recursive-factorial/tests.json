@@ -1,0 +1,11 @@
+[
+  {"id": "zero", "visible": true, "input": {"n": 0}, "expected": {"x0": 1}},
+  {"id": "one", "visible": true, "input": {"n": 1}, "expected": {"x0": 1}},
+  {"id": "five", "visible": true, "input": {"n": 5}, "expected": {"x0": 120}},
+  {"id": "two", "visible": false, "input": {"n": 2}, "expected": {"x0": 2}},
+  {"id": "three", "visible": false, "input": {"n": 3}, "expected": {"x0": 6}},
+  {"id": "ten", "visible": false, "input": {"n": 10}, "expected": {"x0": 3628800}},
+  {"id": "twelve", "visible": false, "input": {"n": 12}, "expected": {"x0": 479001600}},
+  {"id": "past-32-bits", "visible": false, "input": {"n": 13}, "expected": {"x0": 6227020800}},
+  {"id": "twenty", "visible": false, "input": {"n": 20}, "expected": {"x0": 2432902008176640000}}
+]

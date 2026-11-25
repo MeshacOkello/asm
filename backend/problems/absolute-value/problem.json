@@ -1,0 +1,14 @@
+{
+  "title": "Absolute Value",
+  "slug": "absolute-value",
+  "difficulty": "easy",
+  "tags": ["flags"],
+  "kind": "function",
+  "limits": {"instructions": 1000, "seconds": 2},
+  "function": {
+    "name": "absValue",
+    "signature": "long absValue(long n)",
+    "args": [{"name": "n", "type": "long"}],
+    "returns": "long"
+  }
+}

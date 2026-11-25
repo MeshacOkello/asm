@@ -1,0 +1,11 @@
+[
+  {"id": "hello", "visible": true, "input": {"s": "hello"}, "expected": {"x0": 5}},
+  {"id": "empty", "visible": true, "input": {"s": ""}, "expected": {"x0": 0}},
+  {"id": "spaces", "visible": true, "input": {"s": "a b c"}, "expected": {"x0": 5}},
+  {"id": "one-char", "visible": false, "input": {"s": "x"}, "expected": {"x0": 1}},
+  {"id": "whitespace-only", "visible": false, "input": {"s": "   "}, "expected": {"x0": 3}},
+  {"id": "escapes", "visible": false, "input": {"s": "tab\there\nnew \"line\""}, "expected": {"x0": 19}},
+  {"id": "utf8", "visible": false, "input": {"s": "h\u00e9llo"}, "expected": {"x0": 6}},
+  {"id": "long", "visible": false, "input": {"s": "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. "}, "expected": {"x0": 180}},
+  {"id": "digits", "visible": false, "input": {"s": "0123456789"}, "expected": {"x0": 10}}
+]

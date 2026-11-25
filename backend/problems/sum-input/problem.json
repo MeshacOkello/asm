@@ -1,0 +1,8 @@
+{
+  "title": "Sum of Input",
+  "slug": "sum-input",
+  "difficulty": "medium",
+  "tags": ["io", "loops", "stack-frames"],
+  "kind": "io",
+  "limits": {"instructions": 2000, "seconds": 2}
+}

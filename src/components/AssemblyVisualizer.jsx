@@ -12,7 +12,6 @@ import { DEFAULT_RUN_DELAY, runDelayFrom } from "../runSpeed";
 import ErrorMessage from "./ErrorMessage";
 import { fromClient, fromResponse, fromTransport } from "../errors";
 import FlagsPanel from "./FlagsPanel";
-import { applyTheme, initialTheme } from "../theme";
 import PredictPanel from "./PredictPanel";
 import { checkPredictions, emptyScore, predictionFields, recordCheck } from "../predict";
 import { breakpointSteps, clampBreakpoints, isBreakpointStop, nextBreakpointStep, stepSummary, toggleBreakpoint } from "../timeline";
@@ -39,14 +38,18 @@ add x3, x1, x2
 sub x4, x1, x2
 mul x5, x3, x2`;
 
-// `ref` lets the How to use page put an example in the editor; `active` is
-// false while that page is showing and this workspace is kept, hidden.
-export default function AssemblyVisualizer({ ref, active = true, formats }) {
+// `ref` lets the How to use and Challenges pages put a program in the editor;
+// `active` is false while another page is showing and this workspace is kept,
+// hidden. The editor theme is the app's, shared with the challenge editor.
+export default function AssemblyVisualizer({ ref, active = true, formats, theme = "light", onThemeChange }) {
     const [assemblyCode, setAssemblyCode] = useState(STARTER_PROGRAM);
     // The code as it last arrived from outside the editor: the starter
     // program or an opened example. Anything else was written here.
     const providedCode = useRef(STARTER_PROGRAM);
     const [openedExample, setOpenedExample] = useState(null);
+    // A challenge test's stdin, opened with its program: sent as the whole
+    // input, with end-of-file, the first time a Load waits for input.
+    const [presetInput, setPresetInput] = useState(null);
     const loadButton = useRef(null);
     const focusLoadWhenShown = useRef(false);
 
@@ -67,7 +70,6 @@ export default function AssemblyVisualizer({ ref, active = true, formats }) {
     const [stepIndex, setStepIndex] = useState(0);
     const [isRunning, setIsRunning] = useState(false);
     const [runDelay, setRunDelay] = useState(String(DEFAULT_RUN_DELAY));
-    const [theme, setTheme] = useState(initialTheme);
     const workspaceRef = useRef(null);
 
     // Predict mode. A question holds the step it was asked at; the snapshot
@@ -110,8 +112,6 @@ export default function AssemblyVisualizer({ ref, active = true, formats }) {
     const pending = atEnd && !sourceChanged && history.status.state === 'waiting'
         ? history.status.pending : null;
     const dialogOpen = pending !== null && dismissedInput !== pending.occurrence;
-
-    useEffect(() => applyTheme(theme), [theme]);
 
     useEffect(() => {
         if (!active) return;
@@ -262,7 +262,8 @@ export default function AssemblyVisualizer({ ref, active = true, formats }) {
                 && assemblyCode !== source;
         },
         // Put a program in the editor with a clean slate, without running it.
-        openProgram(source, title) {
+        // `stdin`, when given, is supplied whenever a Load of it reads input.
+        openProgram(source, title, { stdin = null } = {}) {
             cancelRequest();
             runId.current++;
             setRunIntent(false);
@@ -276,6 +277,7 @@ export default function AssemblyVisualizer({ ref, active = true, formats }) {
             setInputError(null);
             setDismissedInput(null);
             setOpenedExample(title);
+            setPresetInput(stdin);
             resetScore();
             setBreakpoints(new Set());
             setPickingBreakpoint(false);
@@ -333,10 +335,21 @@ export default function AssemblyVisualizer({ ref, active = true, formats }) {
         setStepIndex(0);
         resetScore();
         try {
-            const data = await simulate(settings, request.controller.signal);
+            let data = await simulate(settings, request.controller.signal);
+            let current = settings;
+            if (presetInput !== null && data.status.state === 'waiting') {
+                // The test's whole stdin, then EOF, as the grader supplies it.
+                current = {
+                    ...settings,
+                    input_events: [{ text: presetInput, eof: true, request_id: data.status.pending.request_id }],
+                };
+                const continued = await simulate(current, request.controller.signal);
+                if (!isCurrentRequest(request)) return;
+                data = extendHistory(data, continued);
+            }
             if (!isCurrentRequest(request)) return;
             setHistory(data);
-            setRun(settings);
+            setRun(current);
         } catch (error) {
             if (isCurrentRequest(request)) setLoadError(failureFrom(error));
         } finally {
@@ -507,7 +520,7 @@ export default function AssemblyVisualizer({ ref, active = true, formats }) {
                         onCancelPicking={cancelPicking}
                         notice={atBreakpoint && !isRunning ? `Paused before line ${upcomingLine}` : null}
                         darkTheme={theme === "dark"}
-                        onDarkThemeChange={(dark) => setTheme(dark ? "dark" : "light")}
+                        onDarkThemeChange={(dark) => onThemeChange?.(dark ? "dark" : "light")}
                     />
 
                     <NextInstruction
@@ -525,6 +538,14 @@ export default function AssemblyVisualizer({ ref, active = true, formats }) {
 
                     <div className="simulation-status" role="status">
                         {openedExample && !history && <p>Opened “{openedExample}”. Select Load to run it.</p>}
+                        {presetInput !== null && (
+                            <p className="preset-input">
+                                Stdin is this test’s input, sent when the program reads.{" "}
+                                <button type="button" className="link-button" onClick={() => setPresetInput(null)}>
+                                    Type input instead
+                                </button>
+                            </p>
+                        )}
                         {sourceChanged && <p>Source edited. Load to start a new run.</p>}
                         {!sourceChanged && atEnd && history.status.state === 'completed' && (
                             <p>Execution complete.{history.status.returned && <> {history.status.returned.function} returned {history.status.returned.value}.</>}</p>

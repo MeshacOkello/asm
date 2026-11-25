@@ -1,0 +1,14 @@
+{
+  "title": "Maximum of an Array",
+  "slug": "array-max",
+  "difficulty": "easy",
+  "tags": ["arrays", "loops"],
+  "kind": "function",
+  "limits": {"instructions": 5000, "seconds": 2},
+  "function": {
+    "name": "arrayMax",
+    "signature": "long arrayMax(long *arr, long n)",
+    "args": [{"name": "arr", "type": "long[]"}, {"name": "n", "type": "long"}],
+    "returns": "long"
+  }
+}

@@ -53,6 +53,8 @@ In another terminal, from the project root:
 npm run dev
 ```
 
+The dev server proxies `/simulate` and `/problems` to `http://127.0.0.1:5001`. Set `BACKEND_URL` to use a backend on another address.
+
 Open the local URL printed by Vite.
 
 ## Using the visualizer
@@ -64,6 +66,46 @@ Open the local URL printed by Vite.
 5. When the program requests input, enter it in the popup to continue.
 
 Registers, memory, and stdout reflect the selected step. **Reset** returns to the beginning of the recorded run. After editing the source, select **Load** again.
+
+## Challenges
+
+The **Challenges** page (`#/problems`) is a set of graded problems. Each problem has a statement, starter code and tests. **Run** checks your code against the visible tests; **Submit** runs every test, hidden ones included. A submission is **Accepted** only when every test passes. Failing hidden tests report only their number and the kind of failure: wrong answer, runtime error, exceeded instruction limit, exceeded time limit, or assembler error.
+
+An accepted submission is scored by the instructions it executed and the memory accesses (loads and stores) it made over all tests, against the reference solution's totals:
+
+| Medal | Rule |
+| --- | --- |
+| Gold | Both totals at most the reference's |
+| Silver | Both totals at most 1.5× the reference's |
+| Bronze | Any other accepted submission |
+
+**Open in visualizer** on a visible test loads your code into the Visualizer to step through: a function problem's code comes with the grader's `main` after it, and an io problem's test input is supplied as stdin. Drafts, solved status and the best medal are kept in this browser's localStorage; there are no accounts.
+
+### Adding a problem
+
+Each problem is a folder in `backend/problems/`, named for its slug:
+
+| File | Contents |
+| --- | --- |
+| `problem.json` | `title`, `slug`, `difficulty` (`easy`, `medium` or `hard`), `tags`, `kind` (`io` or `function`), optional `limits` (`instructions`, at most 10,000, and `seconds`), and for a function problem `function`: its `name`, `signature`, `args` (each a `name` and a `type`: `long`, `int`, `long[]` or `char*`) and `returns` (`long`, `int` or `void`) |
+| `statement.md` | The problem text, with examples. Headings, paragraphs, lists, code fences, `code`, **bold** and *emphasis* are rendered. |
+| `starter.s` | The code the editor starts with |
+| `tests.json` | A list of `{"id", "visible", "input", "expected"}` |
+| `reference.s` | The reference solution. It is never sent to the browser. |
+
+An **io** test's `input` is the stdin text and `expected` the exact stdout. A **function** test's `input` maps each argument name to its value, and `expected` holds `x0` and/or `memory`, the expected final contents of `long[]` arguments. The grader adds a `main` that sets `x19`–`x28` to known values, puts the arguments in `x0`–`x7` (arrays and strings in `.data`), calls the function and returns; `x19`–`x28` and `sp` must be unchanged afterwards. Only instructions on the student's own lines are counted.
+
+Problems are validated when the backend starts, and every reference solution is run against its tests. A malformed problem, or a reference that fails, stops the backend with an error naming the file.
+
+## Tests
+
+```bash
+cd backend && python3 -m unittest
+```
+
+```bash
+node --test src/
+```
 
 ## Supported library functions
 

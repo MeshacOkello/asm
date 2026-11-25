@@ -1,0 +1,12 @@
+[
+  {"id": "three", "visible": true, "input": "3\n1 2 3\n", "expected": "6\n"},
+  {"id": "one-negative", "visible": true, "input": "1\n-5\n", "expected": "-5\n"},
+  {"id": "none", "visible": true, "input": "0\n", "expected": "0\n"},
+  {"id": "five", "visible": false, "input": "5\n10 20 30 40 50\n", "expected": "150\n"},
+  {"id": "mixed-signs", "visible": false, "input": "4\n-10 25 -3 +8\n", "expected": "20\n"},
+  {"id": "one-per-line", "visible": false, "input": "3\n7\n8\n9\n", "expected": "24\n"},
+  {"id": "extra-whitespace", "visible": false, "input": "  2 \n\t 100    \n\n  -1  \n", "expected": "99\n"},
+  {"id": "no-final-newline", "visible": false, "input": "2\n3 4", "expected": "7\n"},
+  {"id": "full-range", "visible": false, "input": "4\n9223372036854775807 -9223372036854775807 1 -1\n", "expected": "0\n"},
+  {"id": "twenty", "visible": false, "input": "20\n-50 -49 -46 -41 -34 -25 -14 -1 14 31 50 71 94 119 146 175 206 239 274 311\n", "expected": "1470\n"}
+]

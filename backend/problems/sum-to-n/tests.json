@@ -1,0 +1,10 @@
+[
+  {"id": "five", "visible": true, "input": {"n": 5}, "expected": {"x0": 15}},
+  {"id": "one", "visible": true, "input": {"n": 1}, "expected": {"x0": 1}},
+  {"id": "zero", "visible": true, "input": {"n": 0}, "expected": {"x0": 0}},
+  {"id": "two", "visible": false, "input": {"n": 2}, "expected": {"x0": 3}},
+  {"id": "ten", "visible": false, "input": {"n": 10}, "expected": {"x0": 55}},
+  {"id": "hundred", "visible": false, "input": {"n": 100}, "expected": {"x0": 5050}},
+  {"id": "odd-large", "visible": false, "input": {"n": 999}, "expected": {"x0": 499500}},
+  {"id": "thousand", "visible": false, "input": {"n": 1000}, "expected": {"x0": 500500}}
+]

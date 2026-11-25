@@ -102,7 +102,8 @@ def written_in(accesses, section):
     )
 
 
-def run_program(program, input_events=None, execution_limit=10_000):
+def create_emulator(program):
+    """A fresh CPU with the program's sections, the stack and the heap mapped."""
     cpu_emulator = Uc(UC_ARCH_ARM64, UC_MODE_ARM)
     cpu_emulator.reg_write(reg.UC_ARM64_REG_NZCV, 0)
 
@@ -121,6 +122,55 @@ def run_program(program, input_events=None, execution_limit=10_000):
     cpu_emulator.mem_map(STACK_START, STACK_END - STACK_START, UC_PROT_READ | UC_PROT_WRITE)
     cpu_emulator.reg_write(reg.UC_ARM64_REG_SP, STACK_END)
     cpu_emulator.mem_map(HEAP_START, HEAP_SIZE, UC_PROT_READ | UC_PROT_WRITE)
+    return cpu_emulator
+
+
+def library_regions(program):
+    """(start, end, writable) for every range a library call may touch."""
+    return (
+        [(section.address, section.address + section.size, section.name in ('.data', '.bss'))
+         for section in program.sections if section.size]
+        + [(STACK_START, STACK_END, True), (HEAP_START, HEAP_START + HEAP_SIZE, True)]
+    )
+
+
+def entry_point(program):
+    """main, as a C program starts, wherever it sits; else the first instruction."""
+    instructions = program.instructions
+    if program.symbols.get('main') in instructions:
+        return program.symbols['main']
+    return min(instructions, default=TEXT_START)
+
+
+def call_library(cpu_emulator, name, heap, stdio, argument, memory, context):
+    """Perform one simulated library call and return to the instruction after it."""
+    first = cpu_emulator.reg_read(reg.UC_ARM64_REG_X0)
+    if name == 'malloc':
+        cpu_emulator.reg_write(reg.UC_ARM64_REG_X0, heap.malloc(first))
+    elif name == 'free':
+        heap.free(first)
+    elif name == 'labs':
+        cpu_emulator.reg_write(reg.UC_ARM64_REG_X0, labs(first))
+    elif name == 'isspace':
+        cpu_emulator.reg_write(reg.UC_ARM64_REG_X0, isspace(first))
+    else:
+        result = stdio.call(name, argument, memory, context)
+        if name in ('fgets', 'getchar', 'scanf'):
+            stdio.prompt_start = len(stdio.output)
+        cpu_emulator.reg_write(reg.UC_ARM64_REG_X0, result)
+    pc = context['address']
+    cpu_emulator.reg_write(reg.UC_ARM64_REG_X30, pc + 4)
+    cpu_emulator.reg_write(reg.UC_ARM64_REG_PC, pc + 4)
+
+
+def bl_target(pc, instruction):
+    """The destination of a BL, whose low 26 bits are a word-scaled offset."""
+    displacement = (instruction & 0x03FFFFFF) - (instruction & 0x02000000) * 2
+    return pc + displacement * 4
+
+
+def run_program(program, input_events=None, execution_limit=10_000):
+    cpu_emulator = create_emulator(program)
 
     address_to_labels = {}
     for label, address in program.symbols.items():
@@ -132,10 +182,7 @@ def run_program(program, input_events=None, execution_limit=10_000):
     ]
     return record_register_states(
         cpu_emulator, program.instructions, address_to_labels, program.symbols, data_sections,
-        input_events or [], execution_limit,
-        [(section.address, section.address + section.size, section.name in ('.data', '.bss'))
-         for section in program.sections if section.size]
-        + [(STACK_START, STACK_END, True), (HEAP_START, HEAP_START + HEAP_SIZE, True)],
+        input_events or [], execution_limit, library_regions(program),
         memory_region_names(program),
     )
 
@@ -435,33 +482,17 @@ def record_register_states(
 
         library_call = None
         if is_bl:
-            # BL's low 26 bits are a signed, word-scaled PC-relative offset.
-            displacement = (instruction & 0x03FFFFFF) - (instruction & 0x02000000) * 2
-            library_call = LIBRARY_TARGETS.get(PC + displacement * 4)
+            library_call = LIBRARY_TARGETS.get(bl_target(PC, instruction))
 
         try:
             if library_call:
-                argument = cpu_emulator.reg_read(reg.UC_ARM64_REG_X0)
-                if library_call == 'malloc':
-                    cpu_emulator.reg_write(reg.UC_ARM64_REG_X0, heap.malloc(argument))
-                elif library_call == 'free':
-                    heap.free(argument)
-                elif library_call == 'labs':
-                    cpu_emulator.reg_write(reg.UC_ARM64_REG_X0, labs(argument))
-                elif library_call == 'isspace':
-                    cpu_emulator.reg_write(reg.UC_ARM64_REG_X0, isspace(argument))
-                else:
-                    context = {
-                        'function': library_call, 'line': instructions[PC].line,
-                        'address': PC, 'step': counter,
-                        'occurrence': f'{counter}:{PC:x}:{library_call}',
-                    }
-                    result = stdio.call(library_call, library_argument, library_memory, context)
-                    if library_call in ('fgets', 'getchar', 'scanf'):
-                        stdio.prompt_start = len(stdio.output)
-                    cpu_emulator.reg_write(reg.UC_ARM64_REG_X0, result)
-                cpu_emulator.reg_write(reg.UC_ARM64_REG_X30, PC + 4)
-                cpu_emulator.reg_write(reg.UC_ARM64_REG_PC, PC + 4)
+                context = {
+                    'function': library_call, 'line': instructions[PC].line,
+                    'address': PC, 'step': counter,
+                    'occurrence': f'{counter}:{PC:x}:{library_call}',
+                }
+                call_library(cpu_emulator, library_call, heap, stdio, library_argument,
+                             library_memory, context)
                 library_calls[PC] = library_call
             else:
                 cpu_emulator.emu_start(PC, stopping_address, count=1)
@@ -599,6 +630,163 @@ def record_register_states(
         {'chunks': stdio.output, 'encoding': 'utf-8'},
         status,
     )
+
+# Grading ------------------------------------------------------------------
+
+# How often the grading loop looks at the clock. Reading it every step would
+# cost more than the steps; every 64 still stops a run within microseconds.
+DEADLINE_CHECK_INTERVAL = 64
+
+
+def signed_value(value, bits=64):
+    value &= (1 << bits) - 1
+    return value - (1 << bits) if value >> (bits - 1) else value
+
+
+def run_for_grading(program, stdin='', execution_limit=10_000, *, counted_lines=None,
+                    deadline=None, read_ranges=()):
+    """Run a program to the end without recording any history.
+
+    The visualizer's run_program snapshots every register, stack cell, frame
+    and section at every step. A grader needs none of that: only how the run
+    ended, its stdout, its final registers and memory, and how many
+    instructions and memory accesses it took. This runs the same instruction
+    loop, with the same library calls and the same fault reporting, and keeps
+    counters instead of a trace.
+
+    `stdin` is supplied up front and followed by end-of-file, so a read never
+    waits. `counted_lines` limits the counts to instructions on those source
+    lines (the student's, not a grader's harness); None counts every one.
+    `read_ranges` is a list of (name, address, size) read after the run.
+    `deadline` is a time.monotonic() value; a run still going then stops.
+    """
+    import time
+
+    cpu_emulator = create_emulator(program)
+    instructions = program.instructions
+    region_names = memory_region_names(program)
+    heap = Heap()
+    stdio = Stdio([])
+    stdio.input.extend(stdin.encode('utf-8'))
+    stdio.eof = True
+
+    counts = {'instructions': 0, 'memory_accesses': 0}
+    counting = False
+
+    def on_access(uc, access, address, size, value, user_data):
+        heap.record_access(address, size, 'write' if access == UC_MEM_WRITE else 'read')
+        if counting:
+            counts['memory_accesses'] += 1
+
+    cpu_emulator.hook_add(UC_HOOK_MEM_READ | UC_HOOK_MEM_WRITE, on_access)
+
+    fault = {}
+
+    def on_fault(uc, access, address, size, value, user_data):
+        fault.update(address=address, size=size, kind=FAULT_KINDS.get(access, 'fetch'))
+        return False
+
+    cpu_emulator.hook_add(UC_HOOK_MEM_INVALID, on_fault)
+
+    # Library calls touch memory through Python, which bypasses the hooks.
+    # They still have to respect the heap; they are not the student's own
+    # loads and stores, so they are not counted.
+    library_memory = LibraryMemory(
+        cpu_emulator, heap, library_regions(program),
+        lambda kind, address, size: heap.record_access(address, size, kind))
+
+    def library_argument(index):
+        if index < 8:
+            return cpu_emulator.reg_read(registers[f'x{index}'])
+        sp = cpu_emulator.reg_read(reg.UC_ARM64_REG_SP)
+        return int.from_bytes(library_memory.read(sp + (index - 8) * 8, 8), 'little')
+
+    PC = entry_point(program)
+    stopping_address = max(instructions, default=TEXT_START) + 4
+    cpu_emulator.reg_write(reg.UC_ARM64_REG_PC, PC)
+    exit_address = cpu_emulator.reg_read(reg.UC_ARM64_REG_X30)
+
+    state, error, returned = None, None, None
+    steps = 0
+    while steps < execution_limit and PC in instructions:
+        if (deadline is not None and steps % DEADLINE_CHECK_INTERVAL == 0
+                and time.monotonic() > deadline):
+            state = 'timeout'
+            break
+        instruction = int.from_bytes(cpu_emulator.mem_read(PC, 4), 'little')
+        is_bl = (instruction & 0xFC000000) == 0x94000000
+        is_ret = (instruction & 0xFFFFFC1F) == 0xD65F0000
+        library_call = LIBRARY_TARGETS.get(bl_target(PC, instruction)) if is_bl else None
+        line = instructions[PC].line
+        counting = counted_lines is None or line in counted_lines
+        fault.clear()
+
+        try:
+            if library_call:
+                context = {
+                    'function': library_call, 'line': line, 'address': PC, 'step': steps,
+                    'occurrence': f'{steps}:{PC:x}:{library_call}',
+                }
+                call_library(cpu_emulator, library_call, heap, stdio, library_argument,
+                             library_memory, context)
+            else:
+                cpu_emulator.emu_start(PC, stopping_address, count=1)
+        except HeapError as failure:
+            message = errors.render(failure.parts)
+            error = errors.runtime_error(
+                message, parts=failure.parts, line=line,
+                suggestion=errors.heap_suggestion(message), kind=failure.kind)
+            break
+        except UcError as failure:
+            # As in run_program: a branch out of the program can make Unicorn
+            # fetch its destination before the single step returns.
+            target = cpu_emulator.reg_read(reg.UC_ARM64_REG_PC)
+            fetch = failure.errno in (UC_ERR_FETCH_PROT, UC_ERR_FETCH_UNMAPPED)
+            if not fetch or target in instructions:
+                if fetch:
+                    fault.setdefault('address', target)
+                message, parts, suggestion, detail = errors.describe_unicorn_error(
+                    failure, fault, region_names)
+                error = errors.runtime_error(
+                    message, parts=parts, line=line, suggestion=suggestion, detail=detail)
+                break
+
+        steps += 1
+        if counting:
+            counts['instructions'] += 1
+        next_pc = cpu_emulator.reg_read(reg.UC_ARM64_REG_PC)
+        if is_ret and next_pc == exit_address:
+            returned = {'value': signed_value(cpu_emulator.reg_read(reg.UC_ARM64_REG_X0), 32)}
+            break
+        PC = next_pc
+
+    if error is not None:
+        state = 'error'
+    elif state is None:
+        if returned:
+            state = 'returned'
+        elif steps >= execution_limit and PC in instructions:
+            state = 'execution_limit'
+        else:
+            state = 'completed'
+
+    memory = {}
+    for name, address, size in read_ranges:
+        try:
+            memory[name] = bytes(cpu_emulator.mem_read(address, size))
+        except UcError:
+            memory[name] = None
+    return {
+        'state': state,
+        'error': error,
+        'returned': returned,
+        'registers': read_all_registers_and_write_to_list(cpu_emulator),
+        'stdout': b''.join(bytes.fromhex(chunk) for chunk in stdio.output),
+        'memory': memory,
+        'steps': steps,
+        **counts,
+    }
+
 
 def main():
     assem = """mov x1, #3

@@ -1,0 +1,11 @@
+[
+  {"id": "positive", "visible": true, "input": {"n": 5}, "expected": {"x0": 5}},
+  {"id": "negative", "visible": true, "input": {"n": -7}, "expected": {"x0": 7}},
+  {"id": "zero", "visible": true, "input": {"n": 0}, "expected": {"x0": 0}},
+  {"id": "minus-one", "visible": false, "input": {"n": -1}, "expected": {"x0": 1}},
+  {"id": "long-max", "visible": false, "input": {"n": 9223372036854775807}, "expected": {"x0": 9223372036854775807}},
+  {"id": "minus-long-max", "visible": false, "input": {"n": -9223372036854775807}, "expected": {"x0": 9223372036854775807}},
+  {"id": "long-min", "visible": false, "input": {"n": -9223372036854775808}, "expected": {"x0": -9223372036854775808}},
+  {"id": "large-negative", "visible": false, "input": {"n": -1234567890123}, "expected": {"x0": 1234567890123}},
+  {"id": "past-32-bits", "visible": false, "input": {"n": -4294967296}, "expected": {"x0": 4294967296}}
+]

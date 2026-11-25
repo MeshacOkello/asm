@@ -2,6 +2,8 @@
 
 Reads a length-prefixed pickled source string on stdin and writes a
 length-prefixed pickled (outcome, payload) pair on stdout, until stdin closes.
+A ('grade', job) tuple instead of a string runs a challenge's tests here, so a
+grading run is bounded by the same kill-and-replace timeout as assembly.
 Keeping this a plain script, started with subprocess, means it does not care
 how the parent process was started.
 """
@@ -39,6 +41,13 @@ def main():
         source = read_message(stdin)
         if source is None:
             return
+        if isinstance(source, tuple) and source[0] == 'grade':
+            try:
+                import grader
+                write_message(stdout, ('graded', grader.grade(**source[1])))
+            except BaseException as error:  # noqa: BLE001 - reported as an internal failure
+                write_message(stdout, ('internal_error', f'{type(error).__name__}: {error}'))
+            continue
         try:
             write_message(stdout, ('program', assemble_program(source)))
         except AssemblyError as error:

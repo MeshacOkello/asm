@@ -1004,7 +1004,9 @@ textarea:focus-visible {
 /* Errors ------------------------------------------------------------------ */
 
 .assembly-visualizer,
-.guide-page {
+.guide-page,
+.challenges-page,
+.challenge-page {
   --error-program: #a3301c;
   --error-program-bg: #fdf1ef;
   --error-program-border: #e7b4a9;

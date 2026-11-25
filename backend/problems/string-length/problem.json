@@ -1,0 +1,14 @@
+{
+  "title": "String Length",
+  "slug": "string-length",
+  "difficulty": "medium",
+  "tags": ["strings", "loops"],
+  "kind": "function",
+  "limits": {"instructions": 5000, "seconds": 2},
+  "function": {
+    "name": "stringLength",
+    "signature": "long stringLength(const char *s)",
+    "args": [{"name": "s", "type": "char*"}],
+    "returns": "long"
+  }
+}
