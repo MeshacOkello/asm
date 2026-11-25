@@ -9,5 +9,10 @@ const backend = process.env.BACKEND_URL || 'http://127.0.0.1:5001'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: { proxy: { '/simulate': backend, '/problems': backend } }
+  server: {
+    // changeOrigin stays false: the backend must see the browser's own host,
+    // so sign-in redirects back here and same-origin checks pass.
+    proxy: Object.fromEntries(['/simulate', '/problems', '/auth', '/api']
+      .map((path) => [path, { target: backend, changeOrigin: false }])),
+  },
 })
