@@ -61,3 +61,6 @@ DerivedDataCache/
 Intermediate/
 Saved/
 Binaries/
+
+# Local account database
+backend/data/
