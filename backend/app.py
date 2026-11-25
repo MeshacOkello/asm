@@ -1,18 +1,16 @@
 import logging
+import os
+import secrets
+from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 from unicorn import UcError
 
 import errors
-import grader
-import problems as problem_files
-import scoring
 from assembler import AssemblyError
-from assembly_worker import (
-    ASSEMBLY_TIMEOUT, AssemblyTimeout, GradingTimeout, assemble_in_worker, grade_in_worker,
-    timeout_error,
-)
+from assembly_worker import AssemblyTimeout, assemble_in_worker, timeout_error
+from responses import MAX_SOURCE_BYTES, bad_request, error_response, parse_body
 from heap import HeapError
 from library_io import InputProtocolError
 from simulator import run_program
@@ -21,31 +19,17 @@ from register_writes import register_writes
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
+# Signs the short-lived OAuth state cookie. Set SECRET_KEY in production; a
+# random key per process works locally but signs everyone out on restart.
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('PUBLIC_URL', '').startswith('https://')
 MAX_SAFE_INTEGER = (1 << 53) - 1
-MAX_SOURCE_BYTES = 1 << 20
 MAX_INPUT_EVENTS = 10_000
 EXECUTION_LIMIT = 10_000
 # The order the data sections are shown in. .text has no visualization.
 DISPLAYED_SECTIONS = ('.data', '.bss', '.rodata')
-
-
-def error_response(error, code):
-    """One JSON shape for every failure, with the flat fields kept for clients
-    that only read `error` and `error_parts`."""
-    body = {
-        'error': errors.legacy_text(error),
-        'error_parts': errors.legacy_parts(error),
-        'error_info': error,
-        'status': {'state': 'error', 'kind': error['kind']},
-    }
-    if error.get('line') is not None:
-        body['status']['line'] = error['line']
-    return jsonify(body), code
-
-
-def bad_request(message, *, suggestion=None):
-    return error_response(
-        errors.payload(errors.REQUEST, message, suggestion=suggestion), 400)
 
 
 @app.errorhandler(HTTPException)
@@ -116,19 +100,6 @@ def section_layout(program):
             'strings': [list(span) for span in section.strings] if section else [],
         })
     return layout
-
-
-def parse_body():
-    """Decode the request body, or say precisely how it was unreadable."""
-    if not request.is_json:
-        return None, 'The request must be sent as JSON with Content-Type: application/json.'
-    try:
-        data = request.get_json()
-    except HTTPException:
-        return None, 'The request body is not valid JSON.'
-    if not isinstance(data, dict):
-        return None, 'The request body must be a JSON object.'
-    return data, None
 
 
 def validate(data):
@@ -270,187 +241,42 @@ def simulate():
     return jsonify(response), 400 if status['state'] == 'error' else 200
 
 
-# Challenges -----------------------------------------------------------------
-#
-# Problems live in backend/problems/ and are validated here, at startup: a
-# malformed problem, or a reference solution that fails its own tests, stops
-# the backend with a ProblemError naming the file. Reference totals are
-# computed once and kept for the medals.
+# Challenges, accounts and the built frontend --------------------------------
 
-FAILURE_LABELS = {
-    grader.WRONG_ANSWER: 'Wrong answer',
-    grader.RUNTIME_ERROR: 'Runtime error',
-    grader.INSTRUCTION_LIMIT: 'Exceeded instruction limit',
-    grader.TIME_LIMIT: 'Exceeded time limit',
-    grader.ASSEMBLER_ERROR: 'Assembler error',
-}
+import accounts_api  # noqa: E402 - registered after the app and its handlers
+import auth  # noqa: E402
+import challenges  # noqa: E402
+import db  # noqa: E402
 
+PROBLEMS = challenges.PROBLEMS
+REFERENCE_TOTALS = challenges.REFERENCE_TOTALS
 
-def job_timeout(problem, tests):
-    """The whole job's budget: every test's own limit, plus room to assemble."""
-    return ASSEMBLY_TIMEOUT + len(tests) * (problem['limits']['seconds'] + 1)
+db.init()
+app.register_blueprint(auth.bp)
+app.register_blueprint(challenges.bp)
+app.register_blueprint(accounts_api.bp)
+if os.environ.get('JUDGE_REQUEUE', '1') == '1':
+    accounts_api.requeue_unfinished()
 
-
-def run_tests(problem, source, tests):
-    """Every test's full, unredacted result, from the grading worker."""
-    try:
-        return grade_in_worker(grader.job(problem, source, tests), job_timeout(problem, tests))
-    except GradingTimeout:
-        # Each run has its own deadline, so only Keystone can get here.
-        failure = timeout_error()
-        return [grader.make_result(test, grader.ASSEMBLER_ERROR, message=failure['message'],
-                               error=failure) for test in tests]
+# In production one service serves both the API and the built frontend, so
+# the session cookie is same-origin. In development Vite serves the frontend.
+DIST = Path(os.environ.get('FRONTEND_DIST', Path(__file__).parent.parent / 'dist'))
 
 
-def reference_totals(problems):
-    """Run each reference solution once; it must pass every one of its tests."""
-    totals = {}
-    for slug, problem in problems.items():
-        results = run_tests(problem, problem['reference'], problem['tests'])
-        for result in results:
-            if not result['passed']:
-                raise problem_files.ProblemError(
-                    f'{problem_files.PROBLEMS_DIR / slug / "reference.s"}: the reference '
-                    f'solution fails test "{result["id"]}" ({result["kind"]}: {result["message"]})')
-        totals[slug] = scoring.totals(results)
-    return totals
+@app.route('/')
+def frontend():
+    if not (DIST / 'index.html').is_file():
+        return error_response(errors.payload(
+            errors.REQUEST, 'The frontend has not been built.',
+            suggestion='Run "npm run build", or use "npm run dev" during development.'), 404)
+    return send_from_directory(DIST, 'index.html')
 
 
-def describe_result(problem, value):
-    """Readable text for an expected or actual function result, or io output."""
-    if value is None:
-        return None
-    if problem['kind'] == 'io':
-        return value
-    parts = []
-    if 'x0' in value:
-        parts.append(f'x0 = {value["x0"]}')
-    for name, values in value.get('memory', {}).items():
-        shown = 'unreadable' if values is None else '[' + ', '.join(map(str, values)) + ']'
-        parts.append(f'{name} = {shown}')
-    return ', '.join(parts)
+@app.route('/assets/<path:name>')
+def frontend_asset(name):
+    return send_from_directory(DIST / 'assets', name)
 
 
-def visible_test(problem, test, number):
-    """A visible test as the workspace shows it, with what it needs to replay it."""
-    shown = {
-        'id': test['id'], 'name': f'Test {number}', 'visible': True,
-        'input': test['input'], 'input_text': grader.describe_input(problem, test['input']),
-        'expected': test['expected'], 'expected_text': describe_result(problem, test['expected']),
-    }
-    if problem['kind'] == 'function':
-        # The main the grader adds after the student's code, so "Open in
-        # visualizer" can step through exactly the program that was graded.
-        shown['harness'] = grader.harness(problem['function'], test['input'])
-    else:
-        shown['stdin'] = test['input']
-    return shown
-
-
-def public_result(problem, test, result, number, hidden_number):
-    """One test's result as a client may see it.
-
-    A visible test shows its input, expected and actual values and any error.
-    A hidden test shows only that it passed, or that it failed and the kind of
-    failure: never its id, input, expected value, output or error message.
-    """
-    label = FAILURE_LABELS.get(result['kind'])
-    if not test['visible']:
-        name = f'Hidden test {hidden_number}'
-        return {
-            'name': name, 'visible': False, 'passed': result['passed'],
-            'kind': result['kind'], 'kind_label': label,
-            'message': None if result['passed'] else f'{name} failed',
-        }
-    shown = visible_test(problem, test, number)
-    shown.update({
-        'passed': result['passed'], 'kind': result['kind'], 'kind_label': label,
-        'actual_text': describe_result(problem, result['actual']),
-        'message': result['message'], 'error': result['error'],
-        'instructions': result['instructions'], 'memory_accesses': result['memory_accesses'],
-    })
-    return shown
-
-
-def numbered(tests):
-    """(test, visible number, hidden number) in the order the tests are listed."""
-    visible = hidden = 0
-    for test in tests:
-        if test['visible']:
-            visible += 1
-        else:
-            hidden += 1
-        yield test, visible, hidden
-
-
-PROBLEMS = problem_files.load_problems()
-REFERENCE_TOTALS = reference_totals(PROBLEMS)
-
-
-def find_problem(slug):
-    problem = PROBLEMS.get(slug)
-    if problem is None:
-        return None, error_response(errors.payload(
-            errors.REQUEST, 'There is no challenge with that name.',
-            suggestion='Open the challenge from the Challenges list.'), 404)
-    return problem, None
-
-
-@app.route('/problems', methods=['GET'])
-def list_problems():
-    return jsonify({'problems': [problem_files.summary(problem) for problem in PROBLEMS.values()]})
-
-
-@app.route('/problems/<slug>', methods=['GET'])
-def show_problem(slug):
-    problem, missing = find_problem(slug)
-    if missing:
-        return missing
-    body = problem_files.summary(problem)
-    body.update({
-        'statement': problem['statement'],
-        'starter': problem['starter'],
-        'limits': problem['limits'],
-        'tests': [visible_test(problem, test, number)
-                  for test, number, _ in numbered(problem['tests']) if test['visible']],
-        'hidden_count': sum(1 for test in problem['tests'] if not test['visible']),
-    })
-    if problem['function']:
-        body['function'] = {key: problem['function'][key] for key in ('name', 'signature', 'args', 'returns')}
-    return jsonify(body)
-
-
-def grade_request(slug, mode):
-    problem, missing = find_problem(slug)
-    if missing:
-        return missing
-    data, unreadable = parse_body()
-    if unreadable is not None:
-        return bad_request(unreadable)
-    source = data.get('code')
-    if not isinstance(source, str):
-        return bad_request('code must be a string', suggestion='Send the editor contents as code.')
-    if len(source.encode('utf-8', errors='replace')) > MAX_SOURCE_BYTES:
-        return bad_request(f'code must be at most {MAX_SOURCE_BYTES} bytes')
-
-    tests = problem['tests'] if mode == 'submit' else [t for t in problem['tests'] if t['visible']]
-    results = run_tests(problem, source, tests)
-    summary = scoring.summarize(results, REFERENCE_TOTALS[slug] if mode == 'submit' else None)
-    summary['verdict_label'] = 'Accepted' if summary['verdict'] == scoring.ACCEPTED \
-        else FAILURE_LABELS[summary['verdict']]
-    summary['mode'] = mode
-    summary['results'] = [
-        public_result(problem, test, result, number, hidden)
-        for (test, number, hidden), result in zip(numbered(tests), results)
-    ]
-    return jsonify(summary)
-
-
-@app.route('/problems/<slug>/run', methods=['POST'])
-def run_problem(slug):
-    return grade_request(slug, 'run')
-
-
-@app.route('/problems/<slug>/submit', methods=['POST'])
-def submit_problem(slug):
-    return grade_request(slug, 'submit')
+@app.route('/<name>.svg')
+def frontend_icon(name):
+    return send_from_directory(DIST, f'{name}.svg')

@@ -6,6 +6,7 @@ import time
 import unittest
 from pathlib import Path
 
+import testing  # noqa: F401 - isolates the database before app is imported
 import assembly_worker
 import grader
 import problems
@@ -478,10 +479,14 @@ class ScoringTests(unittest.TestCase):
 
 class ChallengeEndpointTests(unittest.TestCase):
     def setUp(self):
-        self.client = app.test_client()
+        self.client = testing.isolated_client(self)
+        testing.sign_in(self.client)
 
     def submit(self, slug, code, mode='submit'):
-        return self.client.post(f'/problems/{slug}/{mode}', json={'code': code})
+        """A Run response, or the stored submission once it is judged."""
+        if mode == 'run':
+            return self.client.post(f'/problems/{slug}/run', json={'code': code})
+        return testing.submit(self.client, slug, code)
 
     def secrets(self, problem):
         """Text that would reveal a hidden test or the reference if it appeared.
@@ -535,7 +540,9 @@ class ChallengeEndpointTests(unittest.TestCase):
         response = self.client.get('/problems/no-such-problem')
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.get_json()['error_info']['kind'], 'request')
-        self.assertEqual(self.submit('no-such-problem', '').status_code, 404)
+        response = self.client.post('/problems/no-such-problem/submit', json={'code': ''})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.client.post('/problems/no-such-problem/run', json={'code': ''}).status_code, 404)
 
     def test_code_must_be_a_string(self):
         response = self.client.post('/problems/sum-to-n/run', json={'code': 5})
@@ -577,7 +584,7 @@ class ChallengeEndpointTests(unittest.TestCase):
                 response = self.submit(slug, problem['starter'])
                 data = response.get_json()
                 self.assertNotEqual(data['verdict'], 'accepted')
-                self.assertNotIn('score', data)
+                self.assertIsNone(data.get('score'))
                 hidden = [result for result in data['results'] if not result['visible']]
                 self.assertEqual(len(hidden), sum(not test['visible'] for test in problem['tests']))
                 for number, result in enumerate(hidden, 1):
